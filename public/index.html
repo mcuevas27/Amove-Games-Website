@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMove Games</title>
+    <title>A-Move Games</title>
     <!-- Never fold -->
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
@@ -41,6 +41,7 @@
             animation: blink 0.7s step-end infinite;
         }
     </style>
+    <!-- Let Us Cook -->
     <!-- Import map for Three.js -->
     <script type="importmap">
         {
@@ -62,7 +63,7 @@
         v>
     <script>
         (function() {
-            const text = "AMove Games";
+            const text = "A-Move Games";
             const dots = "...";
             const typedEl = document.getElementById('typed-text');
             let phase = 0; // 0: typing text, 1: pause, 2: typing dots, 3: pause before restart
@@ -70,7 +71,7 @@
             
             function type() {
                 if (phase === 0) {
-                    // Typing "AMove Games"
+                    // Typing "A-Move Games"
                     if (charIndex < text.length) {
                         typedEl.textContent += text[charIndex];
                         charIndex++;
