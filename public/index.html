@@ -70,10 +70,10 @@
                     if (charIndex < text.length) {
                         typedEl.textContent += text[charIndex];
                         charIndex++;
-                        setTimeout(type, 100);
+                        setTimeout(type, 150);
                     } else {
                         phase = 1;
-                        setTimeout(type, 500); // Pause after text
+                        setTimeout(type, 800); // Pause after text
                     }
                 } else if (phase === 1) {
                     // Pause complete, start typing dots
@@ -85,17 +85,17 @@
                     if (charIndex < dots.length) {
                         typedEl.textContent += dots[charIndex];
                         charIndex++;
-                        setTimeout(type, 300);
+                        setTimeout(type, 400);
                     } else {
                         phase = 3;
-                        setTimeout(type, 2000); // Pause with blinking cursor
+                        setTimeout(type, 4000); // Pause with blinking cursor
                     }
                 } else if (phase === 3) {
                     // Reset and loop
                     typedEl.textContent = '';
                     phase = 0;
                     charIndex = 0;
-                    setTimeout(type, 500);
+                    setTimeout(type, 1000);
                 }
             }
             
@@ -311,7 +311,6 @@
             controls.autoRotateSpeed = 1.0;
 
             // Load all SDFs
-            document.getElementById('info').textContent = 'Amove Games...';
             for (const config of SDF_CONFIGS) {
                 const metaRes = await fetch(config.metaPath);
                 const meta = await metaRes.json();
@@ -330,8 +329,6 @@
 
                 console.log(`Loaded SDF: ${config.name} (${meta.resolution}^3)`);
             }
-
-            document.getElementById('info').textContent = 'Amove Games...';
 
             // Particles (Heads) with per-vertex colors, sizes, and opacity
             const MAX_PARTICLES = 5000;
