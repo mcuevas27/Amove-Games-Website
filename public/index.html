@@ -30,6 +30,15 @@
             line-height: 1.6;
         }
         #stats span { color: #0ff; }
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+        #cursor {
+            display: inline-block;
+            animation: blink 1s infinite;
+            margin-left: 2px;
+        }
     </style>
     <!-- Import map for Three.js -->
     <script type="importmap">
@@ -42,7 +51,7 @@
     </script>
 </head>
 <body>
-    <div id="info">Amove Games...</div>
+    <div id="info">Amove Games<span id="cursor">█</span></div>
     <div id="stats" style="display:none">
         FPS: <span id="fps">0</span><br>
         Particles: <span id="particleCount">0</span><br>
