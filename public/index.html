@@ -25,14 +25,29 @@
         <!-- Hero Section -->
         <section class="section-hero">
             <div class="hero-title">
-                <span class="text-scanline title-white">A-MOVE</span>
+                <span><span class="text-scanline title-orange">A</span><span class="text-scanline title-white">-MOVE</span></span>
                 <span class="text-scanline title-cyan">GAMES</span>
             </div>
             <div class="hero-subtitle">EST. 2026</div>
             <div class="hero-quote">Fast Action Real-Time Strategy Rebooted.</div>
         </section>
 
+        <!-- Devs Section -->
+        <section class="section-devs">
+            <h2 class="text-scanline title-cyan">DEVS</h2>
+        </section>
 
+        <!-- Spacer for cube viewing area -->
+        <div style="height: 100vh;"></div>
+
+        <!-- Tooltip Overlay (fixed, managed by JS) -->
+        <div id="dev-tooltip" class="dev-tooltip hidden">
+            <img id="tooltip-img" src="" alt="Dev Portrait" />
+            <div class="tooltip-content">
+                <h3 id="tooltip-name">Dev Name</h3>
+                <p id="tooltip-role">Role</p>
+            </div>
+        </div>
     </main>
 
     <script type="module">
@@ -45,9 +60,15 @@
         // --- SHADERS INLINED ---
         const fogVertexShader = `
             varying vec2 vUv;
+            varying vec2 vPos; // World Position for Infinite Grid
+
             void main() {
                 vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                // Calculate World Position
+                vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                vPos = worldPosition.xy;
+                
+                gl_Position = projectionMatrix * viewMatrix * worldPosition;
             }
         `;
 
@@ -56,6 +77,7 @@
             uniform vec2 uResolution;
             uniform vec2 uMouse;
             uniform sampler2D uVisionTexture;
+            uniform float uScrollOffset; // Normalized scroll offset for re-fogging
 
             varying vec2 vUv;
 
@@ -67,8 +89,20 @@
                 vec4 vision = texture2D(uVisionTexture, vUv);
                 float clearFactor = vision.r;
 
+                // --- SCROLL-BASED RE-FOGGING ---
+                // Calculate distance from current viewport center
+                // Areas far from viewport center get progressively re-fogged
+                float viewportCenterY = 0.5 - uScrollOffset;
+                float distFromCenter = abs(vUv.y - viewportCenterY);
+
+                // Fog fades in for areas more than 0.4 (40% of canvas) from viewport center
+                float scrollFog = smoothstep(0.3, 0.6, distFromCenter);
+
+                // Combine vision reveal with scroll-based re-fogging
+                float effectiveReveal = clearFactor * (1.0 - scrollFog * 0.9);
+
                 // Smooth edge transition (Softened)
-                float revealed = smoothstep(0.0, 0.8, clearFactor);
+                float revealed = smoothstep(0.0, 0.8, effectiveReveal);
 
                 // Fog alpha - slightly transparent to show hints of map
                 float alpha = 0.95 * (1.0 - revealed);
@@ -95,8 +129,11 @@
             uniform float uGapSize;
             uniform float uOutlineWidth;
             uniform float uOutlineOpacity;
+            
+            // uniform float uScrollY; // REMOVED: Parallax is now mesh-based
 
             varying vec2 vUv;
+            varying vec2 vPos; // Receive World Pos
 
             // Hexagon Grid Logic
             vec4 hexCoords(vec2 uv) {
@@ -118,7 +155,9 @@
             }
 
             void main() {
-                vec2 uv = vUv * 20.0;
+                // Use World Position for Grid Coordinates instead of UVs
+                // This ensures the grid continues infinitely regardless of Mesh size/position
+                vec2 uv = vPos * 10.0; // Scale factor (previously vUv * 20.0, plane was 2x2, so 2*10=20. Match scale)
 
                 vec4 h = hexCoords(uv);
                 vec2 id = h.xy;
@@ -157,8 +196,9 @@
                 vec3 col = themeColor * borderMask * uOutlineOpacity; 
                 
                 // --- GLOW EFFECT WHEN REVEALED ---
-                vec2 centerUv = id / 20.0;
-                float revealed = texture2D(uVisionTexture, centerUv).r;
+                // Sample Vision Texture using Screen Coordinates (gl_FragCoord)
+                vec2 screenUv = gl_FragCoord.xy / uResolution;
+                float revealed = texture2D(uVisionTexture, screenUv).r;
 
                 float brightness = smoothstep(0.05, 0.6, revealed);
 
@@ -180,40 +220,50 @@
         const scene = new THREE.Scene();
         const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
         const renderer = new THREE.WebGLRenderer({ alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        const canvasHeight = window.innerHeight * 1.5; // Match 150vh CSS
+        renderer.setSize(window.innerWidth, canvasHeight);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         const mainUniforms = {
             uTime: { value: 0 },
-            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, canvasHeight) },
             uMouse: { value: new THREE.Vector2(0.5, 0.5) },
             uVisionTexture: { value: null },
+            uScrollOffset: { value: 0 }, // For scroll-based re-fogging
             // Configurable
             uColorWater: { value: new THREE.Color('#3e78b6') },
             uColorGrass: { value: new THREE.Color('#3ba2ce') },
             uColorDirt: { value: new THREE.Color('#e6b919') },
-            uColorWaterGlow: { value: new THREE.Color('#73c5ce') },
-            uColorGrassGlow: { value: new THREE.Color('#3f60e4') },
-            uColorDirtGlow: { value: new THREE.Color('#9d6aa4') },
+            uColorWaterGlow: { value: new THREE.Color('#4a7c82') },
+            uColorGrassGlow: { value: new THREE.Color('#2e4399') },
+            uColorDirtGlow: { value: new THREE.Color('#5a4d5c') },
             uGapSize: { value: 0.0888 },
             uOutlineWidth: { value: 0.001 },
             uOutlineOpacity: { value: 0.321 }
         };
 
-        // --- MAP SQUAD ---
-        const mapGeo = new THREE.PlaneGeometry(2, 2);
+        // --- MAP GROUP (Container for Map) ---
+        const mapGroup = new THREE.Group();
+        scene.add(mapGroup);
+
+        const mapGeo = new THREE.PlaneGeometry(10, 20); // Massive Plane to ensure coverage
         const mapMat = new THREE.ShaderMaterial({
             uniforms: mainUniforms,
             vertexShader: fogVertexShader,
             fragmentShader: mapFragmentShader
         });
         const mapPlane = new THREE.Mesh(mapGeo, mapMat);
-        mapPlane.position.z = -0.1; 
-        scene.add(mapPlane);
+        mapPlane.position.z = -0.1;
+        mapGroup.add(mapPlane);
 
-        // --- FOG PERSISTENCE SYSTEM ---
+        // --- UNITS SCENE (Rendered on top of fog) ---
+        const unitsScene = new THREE.Scene();
+
+        // --- FOG VISION SCENE SETUP (Moved Up for dependencies) ---
         const visionScene = new THREE.Scene();
         const visionCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        
+        // Add User Mouse Brush
         const visionBrushGeo = new THREE.PlaneGeometry(0.5, 0.5); 
         const visionBrushMat = new THREE.ShaderMaterial({
             vertexShader: `
@@ -238,6 +288,77 @@
         const visionBrush = new THREE.Mesh(visionBrushGeo, visionBrushMat);
         visionScene.add(visionBrush);
 
+        // --- DEV UNITS SETUP ---
+        // Cube formation: 3 revealed devs on top row, 2 mystery devs on bottom
+        // Positioned centrally for visibility (camera view is -1 to 1)
+        const devs = [
+            // Top row - revealed devs
+            {
+                name: "Michael Skacal",
+                role: "Technical Director",
+                color: 0xff0000,
+                img: "assets/skacal.png",
+                pos: new THREE.Vector3(-0.4, 0.1, -0.5)
+            },
+            {
+                name: "David Kim",
+                role: "Game Director",
+                color: 0x00ff00,
+                img: "assets/david.png",
+                pos: new THREE.Vector3(0, 0.1, -0.5)
+            },
+            {
+                name: "Ramon Zarate",
+                role: "Principal Engineer",
+                color: 0x0000ff,
+                img: "assets/ramon.png",
+                pos: new THREE.Vector3(0.4, 0.1, -0.5)
+            },
+            // Bottom row - mystery devs
+            {
+                name: "Mystery Dev",
+                role: "Principal Artist",
+                color: 0xffff00,
+                img: "assets/portrait_placeholder.png",
+                pos: new THREE.Vector3(-0.2, -0.3, -0.5)
+            },
+            {
+                name: "Mystery Dev",
+                role: "Art Director",
+                color: 0xff00ff,
+                img: "assets/portrait_placeholder.png",
+                pos: new THREE.Vector3(0.2, -0.3, -0.5)
+            }
+        ];
+
+        const unitMeshes = [];
+        const unitVisionBrushes = [];
+
+        // Box Geometry for Units (large for visibility debugging)
+        const boxGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3); 
+
+        // Create Units and Vision Brushes
+        devs.forEach((dev, i) => {
+            // 1. Unit Mesh (added to main scene for now to debug visibility)
+            const mat = new THREE.MeshBasicMaterial({ color: dev.color, transparent: true, opacity: 0 });
+            const mesh = new THREE.Mesh(boxGeo, mat);
+            mesh.position.copy(dev.pos);
+            mesh.rotation.z = Math.PI / 4; // Diamond orientation
+            mesh.userData = { devIndex: i }; // For Raycasting
+            unitsScene.add(mesh); // Add to units scene (renders on top of fog)
+            unitMeshes.push(mesh);
+
+            // 2. Vision Brush (Separate Scene) - larger reveal area around cubes
+            const brush = new THREE.Mesh(visionBrushGeo, visionBrushMat.clone());
+            brush.scale.set(0.8, 0.8 * (window.innerWidth/window.innerHeight) * 1.5, 1);
+            brush.visible = false; // Hidden until cubes fade in
+            visionScene.add(brush);
+            unitVisionBrushes.push(brush);
+        });
+
+        // --- FOG PERSISTENCE SYSTEM ---
+        // (Vision Scene removed from here as it's now above)
+        
         const persistenceScene = new THREE.Scene();
         const persistenceQuadVec = new THREE.PlaneGeometry(2, 2);
         
@@ -280,8 +401,8 @@
             format: THREE.RGBAFormat,
             type: THREE.FloatType 
         };
-        let rtA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParams);
-        let rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParams);
+        let rtA = new THREE.WebGLRenderTarget(window.innerWidth, canvasHeight, rtParams);
+        let rtB = new THREE.WebGLRenderTarget(window.innerWidth, canvasHeight, rtParams);
 
         // --- MAIN SCENE ---
         const planeGeo = new THREE.PlaneGeometry(2, 2);
@@ -297,35 +418,105 @@
         fogScene.add(mainPlane);
 
         // --- INTERACTION ---
-        const mouse = new THREE.Vector2(-10, -10); 
+        const mouse = new THREE.Vector2(-10, -10);
+        const raycaster = new THREE.Raycaster();
+        raycaster.params.Mesh.threshold = 0.1; // Increase hit detection tolerance
+
+        const tooltip = document.getElementById('dev-tooltip');
+        const tooltipImg = document.getElementById('tooltip-img');
+        const tooltipName = document.getElementById('tooltip-name');
+        const tooltipRole = document.getElementById('tooltip-role');
+        const canvasContainer = document.getElementById('canvas-container');
+
+        // Hover state tracking
+        let hoveredCubeIndex = -1;
+        const cubeHoverScale = []; // Track interpolated hover scale for each cube
+        const cubeHoverGlow = []; // Track interpolated glow intensity
+        unitMeshes.forEach(() => {
+            cubeHoverScale.push(1.0);
+            cubeHoverGlow.push(0.0);
+        });
+
         visionBrush.position.set(-10, -10, 0);
 
         document.addEventListener('mousemove', (e) => {
-            // Normalized Mouse for Vision Brush (which is in -1 to 1 space)
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            // Get current parallax offset for coordinate correction
+            const currentScrollY = window.scrollY;
+            const parallaxOffset = currentScrollY * -0.3;
+            const canvasH = window.innerHeight * 1.5;
+
+            // Vision brush coordinates (viewport-relative for fog reveal)
+            const visionX = (e.clientX / window.innerWidth) * 2 - 1;
+            const visionY = -(e.clientY / window.innerHeight) * 2 + 1;
 
             // Update Shader Uniform
             mainUniforms.uMouse.value.x = e.clientX / window.innerWidth;
             mainUniforms.uMouse.value.y = 1.0 - (e.clientY / window.innerHeight);
 
-            // Move Vision Brush
-            visionBrush.position.set(mouse.x, mouse.y, 0);
+            // Move Vision Brush (uses viewport coordinates)
+            visionBrush.position.set(visionX, visionY, 0);
+
+            // --- RAYCASTING FOR TOOLTIP ---
+            // Raycasting needs canvas-relative coordinates accounting for:
+            // 1. Canvas is 150vh tall (not 100vh)
+            // 2. CSS parallax transform shifts the canvas
+            const canvasMouseY = e.clientY - parallaxOffset; // Convert screen Y to canvas Y
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(canvasMouseY / canvasH) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(unitMeshes, false);
+
+            // Reset hover state
+            const previousHovered = hoveredCubeIndex;
+            hoveredCubeIndex = -1;
+
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const devIndex = hit.object.userData.devIndex;
+
+                // Only show tooltip if cube is visible (opacity > 0)
+                if (hit.object.material.opacity > 0.1) {
+                    hoveredCubeIndex = devIndex;
+                    const dev = devs[devIndex];
+
+                    // Show Tooltip
+                    tooltip.classList.remove('hidden');
+                    tooltipName.textContent = dev.name;
+                    tooltipRole.textContent = dev.role;
+                    tooltipImg.src = dev.img;
+
+                    // Position Tooltip
+                    tooltip.style.left = e.clientX + 'px';
+                    tooltip.style.top = e.clientY + 'px';
+                } else {
+                    tooltip.classList.add('hidden');
+                }
+            } else {
+                tooltip.classList.add('hidden');
+            }
         });
 
         // Resize
         window.addEventListener('resize', () => {
              const w = window.innerWidth;
              const h = window.innerHeight;
-             renderer.setSize(w, h);
-             rtA.setSize(w, h);
-             rtB.setSize(w, h);
-             mainUniforms.uResolution.value.set(w, h);
+             const canvasH = h * 1.5; // Match 150vh CSS
+             renderer.setSize(w, canvasH);
+             rtA.setSize(w, canvasH);
+             rtB.setSize(w, canvasH);
+             mainUniforms.uResolution.value.set(w, canvasH);
+             composer.setSize(w, canvasH);
              const aspect = w / h;
-             visionBrush.scale.set(1, aspect, 1);
+             visionBrush.scale.set(1, aspect * 1.5, 1); // Adjust for taller canvas
+
+             // Update Unit Brush Aspect
+             unitVisionBrushes.forEach(b => {
+                 b.scale.set(0.8, 0.8 * aspect * 1.5, 1);
+             });
         });
         
-        visionBrush.scale.set(1, window.innerWidth/window.innerHeight, 1);
+        visionBrush.scale.set(1, (window.innerWidth/window.innerHeight) * 1.5, 1);
 
         // A-Move Click Effect
         document.addEventListener('click', (e) => {
@@ -382,6 +573,16 @@
             waterGlow: '#00ccff',
             grassGlow: '#0080ff',
             dirtGlow: '#9900ff',
+            // Dev Cubes Settings
+            cubeOffsetX: 0,
+            cubeOffsetY: -0.152,
+            cubeSize: 0.08055,
+            cubeTiltX: -44.46,
+            cubeTiltY: 0,
+            cubeSpacing: 1.0,
+            // Scroll tracking
+            scrollY: 0,
+            scrollPercent: 0,
             export: function() {
                 const config = {
                     colors: {
@@ -401,6 +602,14 @@
                         scanThickness: settings.scanThickness,
                         scanGap: settings.scanGap,
                         titleGlow: settings.titleGlow
+                    },
+                    devCubes: {
+                        offsetX: settings.cubeOffsetX,
+                        offsetY: settings.cubeOffsetY,
+                        size: settings.cubeSize,
+                        tiltX: settings.cubeTiltX,
+                        tiltY: settings.cubeTiltY,
+                        spacing: settings.cubeSpacing
                     }
                 };
                 const json = JSON.stringify(config, null, 2);
@@ -411,8 +620,33 @@
             // Typography State
             scanThickness: 6.66,
             scanGap: 0,
-            titleGlow: 13.6
+            titleGlow: 13.6,
+            devsGlow: 4
         };
+
+        // Base positions for dev cubes (before offset/spacing applied)
+        const basePositions = [
+            { x: -0.4, y: 0.1 },   // Michael
+            { x: 0, y: 0.1 },      // David
+            { x: 0.4, y: 0.1 },    // Ramon
+            { x: -0.2, y: -0.3 },  // Mystery 1
+            { x: 0.2, y: -0.3 }    // Mystery 2
+        ];
+
+        // Function to update cube transforms from GUI
+        function updateCubeTransforms() {
+            unitMeshes.forEach((mesh, i) => {
+                // Apply position offset and spacing
+                mesh.position.x = basePositions[i].x * settings.cubeSpacing + settings.cubeOffsetX;
+                mesh.position.y = basePositions[i].y * settings.cubeSpacing + settings.cubeOffsetY;
+
+                // Apply size
+                mesh.scale.setScalar(settings.cubeSize / 0.3); // Normalize to base size
+
+                // Note: Tilt (rotation.x, rotation.y) is applied in animate loop
+                // Z rotation is also in animate loop for continuous spin
+            });
+        }
 
         // Sync Helper
         function updateColor(name, uniform) {
@@ -449,19 +683,106 @@
         fTypo.add(settings, 'scanThickness', 1, 10).name('Scan Thickness').onChange(v => updateCSS('--scan-thickness', v));
         fTypo.add(settings, 'scanGap', 0, 10).name('Scan Gap').onChange(v => updateCSS('--scan-gap', v));
         fTypo.add(settings, 'titleGlow', 0, 50).name('Title Glow').onChange(v => updateCSS('--title-glow', v));
+        fTypo.add(settings, 'devsGlow', 0, 100).name('Devs Glow').onChange(v => {
+            updateCSS('--devs-glow-1', v);
+            updateCSS('--devs-glow-2', v * 2);
+            updateCSS('--devs-glow-3', v * 3);
+        });
 
         const fBloom = gui.addFolder('Bloom');
         fBloom.add(bloomPass, 'strength', 0.0, 5.0).name('Strength');
         fBloom.add(bloomPass, 'radius', 0.0, 1.0).name('Radius');
         fBloom.add(bloomPass, 'threshold', 0.0, 1.0).name('Threshold');
 
+        const fCubes = gui.addFolder('Dev Cubes');
+        fCubes.add(settings, 'cubeOffsetX', -2, 2).name('Offset X').onChange(updateCubeTransforms);
+        fCubes.add(settings, 'cubeOffsetY', -2, 2).name('Offset Y').onChange(updateCubeTransforms);
+        fCubes.add(settings, 'cubeSize', 0.05, 0.5).name('Size').onChange(updateCubeTransforms);
+        fCubes.add(settings, 'cubeTiltX', -90, 90).name('Tilt X (deg)').onChange(updateCubeTransforms);
+        fCubes.add(settings, 'cubeTiltY', -90, 90).name('Tilt Y (deg)').onChange(updateCubeTransforms);
+        fCubes.add(settings, 'cubeSpacing', 0.5, 2.0).name('Spacing').onChange(updateCubeTransforms);
+
+        const fScroll = gui.addFolder('Scroll Info');
+        const scrollYController = fScroll.add(settings, 'scrollY').name('Scroll Y (px)').listen().disable();
+        const scrollPercentController = fScroll.add(settings, 'scrollPercent').name('Scroll %').listen().disable();
+        fScroll.open();
+
         gui.add(settings, 'export').name('💾 EXPORT SETTINGS');
+
+        // Apply initial cube transforms with new defaults
+        updateCubeTransforms();
 
         function animate() {
             requestAnimationFrame(animate);
             
             const dt = clock.getDelta();
             mainUniforms.uTime.value = clock.getElapsedTime();
+
+            // --- PARALLAX UPDATE ---
+            // CSS transform makes canvas scroll slower than HTML content
+            // Negative value moves canvas UP (same direction as scrolling content, but slower)
+            const scrollY = window.scrollY;
+            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+            const parallaxOffset = scrollY * -0.3; // Background scrolls at 30% speed
+            canvasContainer.style.transform = `translateY(${parallaxOffset}px)`;
+
+            // Update scroll offset for fog re-fogging (normalized 0-1 range)
+            const canvasH = window.innerHeight * 1.5;
+            mainUniforms.uScrollOffset.value = -parallaxOffset / canvasH;
+
+            // Update scroll tracking for GUI
+            settings.scrollY = Math.round(scrollY);
+            settings.scrollPercent = maxScroll > 0 ? Math.round((scrollY / maxScroll) * 100) : 0;
+
+            // --- CUBE FADE BASED ON SCROLL ---
+            // Hidden until scrollY=700, fade in from 700-1000, fully visible at 1000+
+            let cubeOpacity = 0;
+            if (scrollY >= 1000) {
+                cubeOpacity = 1;
+            } else if (scrollY > 700) {
+                cubeOpacity = (scrollY - 700) / 300; // 0 to 1 over 300px
+            }
+
+            // --- UNIT ANIMATION & VISION UPDATE ---
+            unitMeshes.forEach((mesh, i) => {
+                // Apply opacity fade
+                mesh.material.opacity = cubeOpacity;
+
+                // --- HOVER EFFECT INTERPOLATION ---
+                const isHovered = (hoveredCubeIndex === i);
+                const targetScale = isHovered ? 1.4 : 1.0;
+                const targetGlow = isHovered ? 1.0 : 0.0;
+
+                // Smooth interpolation (lerp)
+                const lerpSpeed = 8.0 * dt;
+                cubeHoverScale[i] += (targetScale - cubeHoverScale[i]) * lerpSpeed;
+                cubeHoverGlow[i] += (targetGlow - cubeHoverGlow[i]) * lerpSpeed;
+
+                // Apply hover glow - blend towards white/bright
+                const baseColor = new THREE.Color(devs[i].color);
+                const glowColor = new THREE.Color(0xffffff);
+                mesh.material.color.copy(baseColor).lerp(glowColor, cubeHoverGlow[i] * 0.5);
+
+                // Bobbing Animation
+                mesh.position.z = -0.5 + Math.sin(clock.getElapsedTime() * 2.0 + i) * 0.02;
+
+                // Apply tilt from settings (preserved during animation)
+                mesh.rotation.x = settings.cubeTiltX * Math.PI / 180;
+                mesh.rotation.y = settings.cubeTiltY * Math.PI / 180;
+
+                // Z rotation spin (diamond base + continuous rotation) - faster when hovered
+                const baseRotZ = Math.PI / 4;
+                const spinSpeed = 0.5 + cubeHoverGlow[i] * 1.5; // Spin faster on hover
+                mesh.rotation.z = baseRotZ + clock.getElapsedTime() * spinSpeed;
+
+                // Apply hover scale on top of base size
+                const baseScale = settings.cubeSize / 0.3;
+                mesh.scale.setScalar(baseScale * cubeHoverScale[i]);
+
+                // Sync Vision Brush to cube position (only reveal when visible)
+                unitVisionBrushes[i].position.set(mesh.position.x, mesh.position.y, 0);
+                unitVisionBrushes[i].visible = cubeOpacity > 0;
+            });
 
             // Step 1: Decay (rtB -> rtA)
             persistenceMat.uniforms.tDiffuse.value = rtB.texture;
@@ -472,17 +793,21 @@
             renderer.autoClear = false; 
             renderer.render(visionScene, visionCamera);
             renderer.autoClear = true; 
-
+            
             // Step 3: Composer Rendering (Map + Bloom)
             mainUniforms.uVisionTexture.value = rtA.texture;
             
             composer.render();
 
             // Step 4: Render Fog (No Bloom, On Top)
-            renderer.setRenderTarget(null); 
+            renderer.setRenderTarget(null);
             renderer.autoClear = false;
             renderer.clearDepth();
             renderer.render(fogScene, camera);
+
+            // Step 5: Render Units (On top of fog, always visible)
+            renderer.clearDepth();
+            renderer.render(unitsScene, camera);
             renderer.autoClear = true;
 
             // Swap Buffers
