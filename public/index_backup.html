@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A-Move Games</title>
+    <link rel="stylesheet" href="../src/css/style.css">
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="ui-layer">
+        <div id="custom-cursor"></div>
+        <!-- Team Member Cards (Initially hidden) -->
+        <div id="card-architect" class="unit-card" style="position: absolute; top: 25%; left: 15%; transform-origin: top left;">
+            <img src="assets/skacal.png" class="unit-portrait" alt="Architect Portrait">
+            <h2>Michael Skacal</h2>
+            <div class="role">Technical Director</div>
+            <div class="stat">Passive: Roll Forward Technology</div>
+            <div class="stat">Effect: +25% All you can eat sushi</div>
+        </div>
+        <div id="card-designer" class="unit-card" style="position: absolute; top: 25%; right: 15%; transform-origin: top right;">
+            <img src="assets/david.png" class="unit-portrait" alt="Tactician Portrait">
+            <h2>David Kim</h2>
+            <div class="role">Game Director</div>
+            <div class="stat">Passive: Giant Scarf</div>
+            <div class="stat">Effect: +50% GamjaTang</div>
+        </div>
+        <div id="card-engineer" class="unit-card" style="position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); transform-origin: bottom center;">
+            <img src="assets/ramon.png" class="unit-portrait" alt="Weaver Portrait">
+            <h2>Ramon Zarate</h2>
+            <div class="role">Principal Engineer</div>
+            <div class="stat">Passive: Canadian Compute</div>
+            <div class="stat">Effect: +50% Projectiles</div>
+        </div>
+
+        <!-- Mystery Cards -->
+        <div id="card-mystery1" class="unit-card" style="position: absolute; top: 50%; left: 5%; transform-origin: center left;">
+            <img src="assets/tmp%20portrait.jpg" class="unit-portrait" alt="Locked Portrait">
+            <h2>[LOCKED]</h2>
+            <div class="role">Principal Artist</div>
+            <div class="stat">Status: In Transit</div>
+        </div>
+        <div id="card-mystery2" class="unit-card" style="position: absolute; top: 50%; right: 5%; transform-origin: center right;">
+            <img src="assets/tmp%20portrait.jpg" class="unit-portrait" alt="Locked Portrait">
+            <h2>[LOCKED]</h2>
+            <div class="role">Art Director</div>
+            <div class="stat">Status: In Transit</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+        // import { fogVertexShader, fogFragmentShader } from '../src/js/fog_shader.js';
+
+
+
+
+        // --- SHADERS INLINED TO AVOID CORS (FILE://) ISSUES ---
+        const fogVertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+
+        const fogFragmentShader = `
+            uniform float uTime;
+            uniform vec2 uResolution;
+            uniform vec2 uMouse;
+            uniform sampler2D uVisionTexture;
+
+            varying vec2 vUv;
+
+            void main() {
+                // Simple solid fog color - Black as requested
+                vec3 fogColor = vec3(0.0, 0.0, 0.0);
+
+                // Sample vision texture
+                vec4 vision = texture2D(uVisionTexture, vUv);
+                float clearFactor = vision.r;
+
+                // Smooth edge transition (Softened)
+                float revealed = smoothstep(0.0, 0.8, clearFactor);
+
+                // Fog alpha - slightly transparent to show hints of map
+                float alpha = 0.85 * (1.0 - revealed);
+
+                gl_FragColor = vec4(fogColor, alpha);
+            }
+        `;
+
+        // --- MAP SHADER (Procedural Hexagon Map) ---
+        const mapFragmentShader = `
+            uniform vec2 uResolution;
+            uniform vec2 uMouse;
+            uniform float uTime;
+            uniform sampler2D uVisionTexture;
+            varying vec2 vUv;
+
+            // Hexagon Grid Logic
+            vec4 hexCoords(vec2 uv) {
+                vec2 r = vec2(1.0, 1.73);
+                vec2 h = r * 0.5;
+
+                vec2 a = mod(uv, r) - h;
+                vec2 b = mod(uv - h, r) - h;
+
+                vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+
+                float x = abs(gv.x);
+                float y = abs(gv.y);
+                float dist = 0.5 * r.x - max(x, x * 0.5 + y * 0.866);
+
+                vec2 id = uv - gv;
+
+                return vec4(id, dist, 0.0);
+            }
+
+            void main() {
+                vec2 uv = vUv * 20.0;
+
+                vec4 h = hexCoords(uv);
+                vec2 id = h.xy;
+                float dist = h.z;
+
+                // Integer-based terrain selection using mod
+                vec2 intId = floor(id + 0.5);
+                float terrainIndex = mod(intId.x + intId.y * 2.0, 3.0);
+
+                // Terrain colors - PASTEL PALETTE
+                vec3 water = vec3(0.65, 0.75, 0.85); // Pastel Blue
+                vec3 grass = vec3(0.70, 0.85, 0.70); // Pastel Green
+                vec3 dirt = vec3(0.85, 0.75, 0.65);  // Pastel Beige
+
+                // Glow colors - Softer Pastels
+                vec3 waterGlow = vec3(0.7, 0.9, 1.0);
+                vec3 grassGlow = vec3(0.8, 1.0, 0.8);
+                vec3 dirtGlow = vec3(1.0, 0.9, 0.7);
+
+                // Select base color
+                float isWater = 1.0 - step(0.5, terrainIndex);
+                float isGrass = step(0.5, terrainIndex) * (1.0 - step(1.5, terrainIndex));
+                float isDirt = step(1.5, terrainIndex);
+
+                vec3 themeColor = water * isWater + grass * isGrass + dirt * isDirt;
+                vec3 glowColor = waterGlow * isWater + grassGlow * isGrass + dirtGlow * isDirt;
+
+                // --- ISOLATED TILES (HOLLOW OUTLINES) ---
+                // gapSize defines the outer boundary
+                float gapSize = 0.05;
+                float hexMask = smoothstep(gapSize, gapSize + 0.02, dist);
+                
+                // Outline logic:
+                // We want a strip from gapSize inwards.
+                // Let's say thickness is 0.03
+                float outlineWidth = 0.03;
+                float innerEdge = gapSize + outlineWidth;
+                
+                // Mask for the inner hole (we want this to be 0 for the outline)
+                float innerMask = smoothstep(innerEdge, innerEdge + 0.02, dist);
+                
+                // Border mask is Outer - Inner
+                float borderMask = hexMask - innerMask;
+                
+                // Base tile - muted pastel outline (dimmed 50% for subtlety)
+                vec3 col = themeColor * borderMask * 0.25; 
+                
+                // --- GLOW EFFECT WHEN REVEALED ---
+                vec2 centerUv = id / 20.0;
+                float revealed = texture2D(uVisionTexture, centerUv).r;
+
+                float brightness = smoothstep(0.05, 0.6, revealed);
+
+                // When revealed, brighten the outline
+                col += themeColor * borderMask * brightness * 0.2; // Boost outline
+
+                // Interactive Glow (Billie Jean)
+                // Highlight the edges of the outline
+                col += glowColor * 0.025 * brightness * borderMask;
+
+                // Rim highlight on the outer island edge (extra definition)
+                float rim = smoothstep(gapSize, gapSize + 0.02, dist) * (1.0 - smoothstep(gapSize + 0.02, gapSize + 0.04, dist));
+                col += glowColor * rim * brightness * 0.05;
+
+                // Final dim as requested previously? 
+                // We baked 0.3 into base, let's keep it there.
+                
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `;
+
+        // Scene Setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const mainUniforms = {
+            uTime: { value: 0 },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+            uMouse: { value: new THREE.Vector2(0.5, 0.5) }, // Added mouse uniform
+            uVisionTexture: { value: null } // This will be the accumulated vision
+        };
+
+        // --- MAP SQUAD ---
+        const mapGeo = new THREE.PlaneGeometry(2, 2);
+        const mapMat = new THREE.ShaderMaterial({
+            uniforms: mainUniforms, // Share uniforms (uMouse, uResolution)
+            vertexShader: fogVertexShader,
+            fragmentShader: mapFragmentShader
+        });
+        const mapPlane = new THREE.Mesh(mapGeo, mapMat);
+        mapPlane.position.z = -0.1; 
+        scene.add(mapPlane);
+
+        // --- FOG PERSISTENCE SYSTEM (Ping-Pong Buffers) ---
+
+        
+        // 1. Vision Buffer Scene (Where we draw the brush)
+        const visionScene = new THREE.Scene();
+        const visionCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        // Use a quad for the shader to draw on
+        const visionBrushGeo = new THREE.PlaneGeometry(0.4, 0.4); 
+        const visionBrushMat = new THREE.ShaderMaterial({
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                varying vec2 vUv;
+                void main() {
+                    // Distance from center (0.5, 0.5)
+                    float dist = length(vUv - 0.5);
+                    // Radius 0.5 in UV space is the edge of the quad
+                    
+                    // Falloff: 1.0 at center, 0.0 at edge
+                    float intensity = 1.0 - smoothstep(0.0, 0.5, dist);
+                    
+                    // Make it non-linear for a "hotspot" effect
+                    intensity = pow(intensity, 2.0);
+                    
+                    gl_FragColor = vec4(intensity, 0.0, 0.0, 1.0); // Write to Red channel
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending // Additive blending for accumulation? 
+            // Actually, we are rendering into rtA on top of rtB (decayed).
+            // This is "Step 2: Draw Brush".
+            // Persistence loop:
+            // 1. Decay pass (copy rtB to rtA with fade).
+            // 2. Clear false.
+            // 3. Render brush.
+            // If we use Additive, we ADD strictly.
+            // If we use Normal, we overwrite.
+            // We want to "add" vision. So if it was 0.5, and we brush 0.8, it becomes 1.0 (clamped).
+            // Additive is good.
+        });
+        const visionBrush = new THREE.Mesh(visionBrushGeo, visionBrushMat);
+        visionScene.add(visionBrush);
+
+        // 2. Persistence Scene (Where we draw the previous frame - decay)
+        const persistenceScene = new THREE.Scene();
+        const persistenceQuadVec = new THREE.PlaneGeometry(2, 2);
+        
+        // Shader to fade out the texture
+        const persistenceShader = {
+            uniforms: {
+                tDiffuse: { value: null },
+                uDecay: { value: 0.02 } // How fast fog returns (0.0 to 1.0)
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float uDecay;
+                varying vec2 vUv;
+                void main() {
+                    vec4 texel = texture2D(tDiffuse, vUv);
+                    // Decay alpha/brightness
+                    float val = texel.r - uDecay;
+                    gl_FragColor = vec4(val, val, val, 1.0);
+                }
+            `
+        };
+        
+        const persistenceMat = new THREE.ShaderMaterial({
+            uniforms: persistenceShader.uniforms,
+            vertexShader: persistenceShader.vertexShader,
+            fragmentShader: persistenceShader.fragmentShader
+        });
+        const persistenceQuad = new THREE.Mesh(persistenceQuadVec, persistenceMat);
+        persistenceScene.add(persistenceQuad);
+
+        // 3. Render Targets (Ping Pong)
+        const rtParams = { 
+            minFilter: THREE.LinearFilter, 
+            magFilter: THREE.LinearFilter, 
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType // Important for smooth decay
+        };
+        let rtA = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParams);
+        let rtB = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParams);
+
+        // --- MAIN SCENE ---
+
+        // Background Map (Procedural Dark Terrain)
+        // We'll pass the "Vision Texture" (rtA) to the main Fog Shader
+        
+        const planeGeo = new THREE.PlaneGeometry(2, 2);
+        // mainUniforms moved to top
+
+
+        // Plain Fog Shader
+        const mainMat = new THREE.ShaderMaterial({
+            uniforms: mainUniforms,
+            vertexShader: fogVertexShader,
+            fragmentShader: fogFragmentShader,
+            transparent: true
+        });
+
+        const mainPlane = new THREE.Mesh(planeGeo, mainMat);
+        // Fog will be rendered separately after units
+        const fogScene = new THREE.Scene();
+        fogScene.add(mainPlane);
+
+        // --- 3D UNIT PIECES SYSTEM ---
+        const unitScene = new THREE.Scene();
+        const unitCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        unitCamera.position.set(0, 2.5, 2.5);
+        unitCamera.lookAt(0, 0, 0);
+
+        // Lighting for 3D units
+        const ambientLight = new THREE.AmbientLight(0x404050, 0.5);
+        unitScene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0xffffff, 1, 10);
+        pointLight.position.set(0, 3, 2);
+        unitScene.add(pointLight);
+
+        // Simple colored material for placeholder cubes
+        function createUnitMaterial(baseColor) {
+            return new THREE.MeshLambertMaterial({
+                color: baseColor,
+                emissive: baseColor,
+                emissiveIntensity: 0.2
+            });
+        }
+
+        // Simple cube geometry placeholder
+        function createUnitGeometry() {
+            return new THREE.BoxGeometry(0.2, 0.3, 0.2);
+        }
+
+        // Unit data with 3D positions (x, z on the hex plane, matching POI layout)
+        const unitData = [
+            { id: 'card-architect', type: 'commander', pos: [-0.8, 0, -0.4], color: 0xc9a063, glow: 0xffd700 },
+            { id: 'card-designer', type: 'tactician', pos: [0.8, 0, -0.4], color: 0x6a9fcc, glow: 0x00ccff },
+            { id: 'card-engineer', type: 'engineer', pos: [0, 0, 0.6], color: 0x8bc98b, glow: 0x00ff88 },
+            { id: 'card-mystery1', type: 'mystery', pos: [-1.2, 0, 0.3], color: 0x445566, glow: 0x667788, locked: true },
+            { id: 'card-mystery2', type: 'mystery', pos: [1.2, 0, 0.3], color: 0x445566, glow: 0x667788, locked: true }
+        ];
+
+        const units = [];
+        unitData.forEach(data => {
+            const geo = createUnitGeometry();
+            const mat = createUnitMaterial(data.color);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(data.pos[0], data.pos[1] + 0.15, data.pos[2]);
+            mesh.userData = { id: data.id, locked: data.locked || false, baseColor: data.color };
+            unitScene.add(mesh);
+            units.push(mesh);
+        });
+
+        // Raycaster for unit hover detection
+        const raycaster = new THREE.Raycaster();
+        const mouseNDC = new THREE.Vector2();
+
+        // --- INTERACTION ---
+
+        const mouse = new THREE.Vector2(-10, -10); // Start off-screen to prevent center reveal
+        const mouseRaw = new THREE.Vector2(0, 0); // Window pixels
+        const cursor = document.getElementById('custom-cursor');
+
+        let hoveredUnit = null;
+        let hasMouseMoved = false; // Track if mouse has moved at least once
+
+        // Position vision brush off-screen initially
+        visionBrush.position.set(-10, -10, 0);
+
+        document.addEventListener('mousemove', (e) => {
+            hasMouseMoved = true;
+            mouseRaw.x = e.clientX;
+            mouseRaw.y = e.clientY;
+
+            // Normalized Mouse for Vision Brush (which is in -1 to 1 space)
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            // Update Shader Uniform (0 to 1 space, Y inverted for UV)
+            mainUniforms.uMouse.value.x = e.clientX / window.innerWidth;
+            mainUniforms.uMouse.value.y = 1.0 - (e.clientY / window.innerHeight);
+
+            // Move Vision Brush (only after mouse has moved)
+            const aspect = window.innerWidth / window.innerHeight;
+            visionBrush.position.set(mouse.x, mouse.y, 0);
+
+            // Custom CSS Cursor
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+
+            // Raycast for 3D unit hover
+            mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouseNDC, unitCamera);
+
+            const intersects = raycaster.intersectObjects(units);
+
+            let newHoveredUnit = null;
+
+            if (intersects.length > 0) {
+                const hit = intersects[0].object;
+                newHoveredUnit = hit.userData.id;
+            } else {
+                // Check proximity to units in screen space as fallback
+                let closestUnit = null;
+                let closestDist = Infinity;
+
+                units.forEach(unit => {
+                    // Project 3D position to screen
+                    const pos = unit.position.clone();
+                    pos.project(unitCamera);
+                    const screenX = (pos.x + 1) / 2 * window.innerWidth;
+                    const screenY = (-pos.y + 1) / 2 * window.innerHeight;
+
+                    const dx = e.clientX - screenX;
+                    const dy = e.clientY - screenY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < closestDist && dist < 120) {
+                        closestDist = dist;
+                        closestUnit = unit;
+                    }
+                });
+
+                if (closestUnit) {
+                    newHoveredUnit = closestUnit.userData.id;
+                }
+            }
+
+            // Handle card visibility changes - only one card at a time
+            // Handle card visibility changes - only one card at a time
+            if (newHoveredUnit !== hoveredUnit) {
+                // Highlight 3D Unit
+                units.forEach(u => {
+                    if (u.userData.id === newHoveredUnit) {
+                        // Active State
+                        u.material.emissiveIntensity = 0.8; 
+                        u.scale.setScalar(1.2); 
+                        u.material.color.setHex(u.userData.baseColor); // Ensure color is reset if we change it later
+                        // Optional: flash white?
+                    } else {
+                        // Passive State
+                        u.material.emissiveIntensity = 0.2;
+                        u.scale.setScalar(1.0);
+                    }
+                });
+
+                // Hide the old card first
+                if (hoveredUnit) {
+                    checkUnitPOI(hoveredUnit, false);
+                }
+                // Show the new card
+                if (newHoveredUnit) {
+                    checkUnitPOI(newHoveredUnit, true);
+                }
+                hoveredUnit = newHoveredUnit;
+            }
+        });
+
+        // Track card visibility state for animation triggering
+        const cardStates = {};
+        unitData.forEach(data => cardStates[data.id] = false);
+
+        // Unit-based POI system (triggered by 3D unit proximity)
+        function checkUnitPOI(unitId, isNear) {
+            const el = document.getElementById(unitId);
+            if (!el) return;
+
+            const wasVisible = cardStates[unitId];
+
+            if (isNear) {
+                if (!wasVisible) {
+                    // Card just became visible - trigger animation
+                    el.style.display = 'block';
+                    el.style.animation = 'none';
+                    el.offsetHeight; // Force reflow
+                    el.style.animation = 'cardReveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+                    cardStates[unitId] = true;
+                }
+            } else {
+                if (wasVisible) {
+                    // Card leaving - fade out
+                    el.style.animation = 'cardFadeOut 0.25s ease-out forwards';
+                    cardStates[unitId] = false;
+                    setTimeout(() => {
+                        if (!cardStates[unitId]) {
+                            el.style.display = 'none';
+                        }
+                    }, 250);
+                }
+            }
+        }
+
+        // Resize
+        window.addEventListener('resize', () => {
+             const w = window.innerWidth;
+             const h = window.innerHeight;
+             renderer.setSize(w, h);
+             rtA.setSize(w, h);
+             rtB.setSize(w, h);
+             mainUniforms.uResolution.value.set(w, h);
+
+             // Update unit camera aspect
+             unitCamera.aspect = w / h;
+             unitCamera.updateProjectionMatrix();
+
+             // Fix brush aspect
+             const aspect = w / h;
+             visionBrush.scale.set(1, aspect, 1);
+        });
+        
+        // Initial Aspect Fix
+        visionBrush.scale.set(1, window.innerWidth/window.innerHeight, 1);
+
+        // A-Move Click Effect
+        document.addEventListener('click', (e) => {
+            spawnAMoveMarker(e.clientX, e.clientY);
+        });
+
+        function spawnAMoveMarker(x, y) {
+            const marker = document.createElement('div');
+            marker.className = 'amove-marker';
+            marker.style.left = x + 'px';
+            marker.style.top = y + 'px';
+            
+            // Create 4 arrows
+            for(let i=0; i<4; i++) {
+                const arrow = document.createElement('div');
+                arrow.className = 'arrow';
+                // Need to fix rotation in CSS or inline
+                // The CSSnth-child handles rotation base, but animation needs to know it?
+                // Actually my CSS keyframe logic is a bit flawed because I didn't pass specific rotations.
+                // Let's rely on the nth-child static rotation and animate the `translateY`.
+                // In CSS provided:
+                // .arrow:nth-child(1) { transform: translate(-50%, -50%) rotate(0deg) translateY(-20px); }
+                // The animation modifies margin-top.
+                // Works simply enough for a prototype.
+                if (i===0) arrow.style.setProperty('--angle', '0deg');
+                if (i===1) arrow.style.setProperty('--angle', '90deg');
+                if (i===2) arrow.style.setProperty('--angle', '180deg');
+                if (i===3) arrow.style.setProperty('--angle', '270deg');
+                marker.appendChild(arrow);
+            }
+            
+            document.getElementById('ui-layer').appendChild(marker);
+            
+            // Cleanup
+            setTimeout(() => {
+                marker.remove();
+            }, 500);
+        }
+
+        // Initialize Clock
+        const clock = new THREE.Clock();
+
+        // --- POST PROCESSING SETUP ---
+        const composer = new EffectComposer(renderer);
+        window.composer = composer; 
+        
+        // Pass 1: Map (Clears background)
+        const mapPass = new RenderPass(scene, camera);
+        composer.addPass(mapPass);
+
+        // Pass 2: Units (Draws on top, does NOT clear color, but MUST clear depth to mix Ortho/Persp)
+        const unitPass = new RenderPass(unitScene, unitCamera);
+        unitPass.clear = false;
+        unitPass.clearDepth = true; // Fix for missing cubes (Depth mismatch between Ortho Map and Persp Units)
+        composer.addPass(unitPass);
+
+        // Pass 3: Bloom (Glow!)
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight), 
+            1.812, // Strength
+            0.063, // Radius
+            0.174  // Threshold
+        );
+        composer.addPass(bloomPass);
+
+        // --- DEBUG GUI ---
+        const gui = new GUI({ title: 'Debug Menu' });
+        const bloomFolder = gui.addFolder('Bloom Settings');
+        bloomFolder.add(bloomPass, 'strength', 0.0, 3.0).name('Strength');
+        bloomFolder.add(bloomPass, 'radius', 0.0, 1.0).name('Radius');
+        bloomFolder.add(bloomPass, 'threshold', 0.0, 1.0).name('Threshold');
+        bloomFolder.add(bloomPass, 'enabled').name('Enable Bloom');
+        bloomFolder.open();
+        
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const dt = clock.getDelta();
+            mainUniforms.uTime.value = clock.getElapsedTime();
+
+            // Step 1: Decay (rtB -> rtA)
+            persistenceMat.uniforms.tDiffuse.value = rtB.texture;
+            renderer.setRenderTarget(rtA);
+            // Disable autoClear so we can draw on top? No, Decay pass draws a full quad.
+            renderer.render(persistenceScene, visionCamera);
+            
+            // Step 2: Draw Brush (Additively on top of rtA)
+            renderer.autoClear = false; // Don't clear the decayed frame
+            renderer.render(visionScene, visionCamera);
+            renderer.autoClear = true; // Reset
+
+            // Step 3: Composer Rendering (Map + Units + Bloom)
+            // Use the accumulated vision texture for the map shader
+            mainUniforms.uVisionTexture.value = rtA.texture;
+            
+            composer.render();
+
+            // Step 4: Render Fog (No Bloom, On Top)
+            renderer.setRenderTarget(null); // Explicitly bind screen
+            renderer.autoClear = false;
+            renderer.clearDepth();
+            renderer.render(fogScene, camera);
+            renderer.autoClear = true;
+
+            // Animate unit bobbing
+            const time = mainUniforms.uTime.value;
+            units.forEach((unit, i) => {
+                unit.position.y = 0.15 + Math.sin(time * 1.5 + i * 1.2) * 0.03;
+                unit.rotation.y = time * 0.3 + i * 0.5;
+            });
+
+            // Swap Buffers
+            let temp = rtA;
+            rtA = rtB;
+            rtB = temp;
+        }
+        animate();
+    </script>
+</body>
+</html>
