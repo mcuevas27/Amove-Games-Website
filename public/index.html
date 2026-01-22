@@ -28,7 +28,7 @@
                 <span><span class="text-scanline title-orange">A</span><span class="text-scanline title-white">-MOVE</span></span>
                 <span class="text-scanline title-cyan">GAMES</span>
             </div>
-            <div class="hero-subtitle">EST. 2026</div>
+            <div class="hero-subtitle">EST. 2026 USA//CANADA aka North North Dakota</div>
             <div class="hero-quote">Fast Action Real-Time Strategy Rebooted.</div>
         </section>
 
@@ -37,17 +37,6 @@
             <h2 class="text-scanline title-cyan">DEVS</h2>
         </section>
 
-        <!-- Spacer for cube viewing area -->
-        <div style="height: 100vh;"></div>
-
-        <!-- Tooltip Overlay (fixed, managed by JS) -->
-        <div id="dev-tooltip" class="dev-tooltip hidden">
-            <img id="tooltip-img" src="" alt="Dev Portrait" />
-            <div class="tooltip-content">
-                <h3 id="tooltip-name">Dev Name</h3>
-                <p id="tooltip-role">Role</p>
-            </div>
-        </div>
     </main>
 
     <script type="module">
@@ -58,161 +47,195 @@
         import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
         // --- SHADERS INLINED ---
-        const fogVertexShader = `
+        const mapVertexShader = `
             varying vec2 vUv;
-            varying vec2 vPos; // World Position for Infinite Grid
-
+            varying vec2 vPos;
+            
             void main() {
                 vUv = uv;
-                // Calculate World Position
                 vec4 worldPosition = modelMatrix * vec4(position, 1.0);
                 vPos = worldPosition.xy;
-                
                 gl_Position = projectionMatrix * viewMatrix * worldPosition;
             }
         `;
 
-        const fogFragmentShader = `
-            uniform float uTime;
-            uniform vec2 uResolution;
-            uniform vec2 uMouse;
-            uniform sampler2D uVisionTexture;
-            uniform float uScrollOffset; // Normalized scroll offset for re-fogging
-
+        // --- SIMULATION SHADER (Ping Pong) ---
+        // Handles the persistent "Mask" layer
+        const simVertexShader = `
             varying vec2 vUv;
-
             void main() {
-                // Simple solid fog color - Deep Space Black
-                vec3 fogColor = vec3(0.02, 0.02, 0.05);
-
-                // Sample vision texture
-                vec4 vision = texture2D(uVisionTexture, vUv);
-                float clearFactor = vision.r;
-
-                // --- SCROLL-BASED RE-FOGGING ---
-                // Calculate distance from current viewport center
-                // Areas far from viewport center get progressively re-fogged
-                float viewportCenterY = 0.5 - uScrollOffset;
-                float distFromCenter = abs(vUv.y - viewportCenterY);
-
-                // Fog fades in for areas more than 0.4 (40% of canvas) from viewport center
-                float scrollFog = smoothstep(0.3, 0.6, distFromCenter);
-
-                // Combine vision reveal with scroll-based re-fogging
-                float effectiveReveal = clearFactor * (1.0 - scrollFog * 0.9);
-
-                // Smooth edge transition (Softened)
-                float revealed = smoothstep(0.0, 0.8, effectiveReveal);
-
-                // Fog alpha - slightly transparent to show hints of map
-                float alpha = 0.95 * (1.0 - revealed);
-
-                gl_FragColor = vec4(fogColor, alpha);
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `;
 
-        // --- MAP SHADER (Procedural Hexagon Map) ---
-        const mapFragmentShader = `
-            uniform vec2 uResolution;
-            uniform vec2 uMouse;
-            uniform float uTime;
-            uniform sampler2D uVisionTexture;
-            
-            // Customizable Uniforms
-            uniform vec3 uColorWater;
-            uniform vec3 uColorGrass;
-            uniform vec3 uColorDirt;
-            uniform vec3 uColorWaterGlow;
-            uniform vec3 uColorGrassGlow;
-            uniform vec3 uColorDirtGlow;
-            
-            uniform float uGapSize;
-            uniform float uOutlineWidth;
-            uniform float uOutlineOpacity;
-            
-            // uniform float uScrollY; // REMOVED: Parallax is now mesh-based
-
+        const simFragmentShader = `
             varying vec2 vUv;
-            varying vec2 vPos; // Receive World Pos
+            uniform sampler2D uTexture;
+            uniform vec2 uMouse;
+            uniform float uResolutionRatio; // Aspect Ratio Correction
+            uniform float uCursorRadius;
+            uniform float uDecay;
+            uniform float uTime;
+            
+            void main() {
+                // Sample previous frame
+                vec4 prev = texture2D(uTexture, vUv);
+                
+                // Decay
+                float value = prev.r * uDecay;
+                
+                // Brush (Mouse Interaction)
+                // Correct for Aspect Ratio in distance calc
+                vec2 aspectUV = vUv;
+                aspectUV.x *= uResolutionRatio;
+                
+                vec2 aspectMouse = uMouse;
+                aspectMouse.x *= uResolutionRatio;
+                
+                // Distance to brush
+                float d = distance(aspectUV, aspectMouse);
+                
+                // Draw new 'paint'
+                // uCursorRadius is in grid units in the main shader.
+                // We'll approximate: 0.05 is a decent size in UV space relative to radius.
+                float brush = 1.0 - smoothstep(0.0, uCursorRadius * 0.005, d); 
+                
+                // Add brush to value
+                value = max(value, brush);
+                
+                // Clamp
+                value = clamp(value, 0.0, 1.0);
+                
+                gl_FragColor = vec4(value, 0.0, 0.0, 1.0);
+            }
+        `;
 
-            // Hexagon Grid Logic
-            vec4 hexCoords(vec2 uv) {
-                vec2 r = vec2(1.0, 1.73);
-                vec2 h = r * 0.5;
+        // --- HEXAGON PATTERN SHADER ---
+        // Based on standard hex grid math
+        const mapFragmentShader = `
+            varying vec2 vUv;
+            uniform float uTime;
+            uniform float uScale;
+            uniform float uStrokeWidth;
+            uniform float uGap;
+            uniform vec2 uResolution;
+            
+            // Pulse Uniforms
+            uniform float uPulseSpeed;
+            uniform float uPulseDensity; // 0.0 to 1.0 (roughly)
+            uniform vec3 uPulseColor;
+            
+            // Stroke Colors
+            uniform vec3 uStrokeColor1;
+            uniform vec3 uStrokeColor2;
+            uniform vec3 uStrokeColor3;
+            
+            // Interaction Texture (from Sim)
+            uniform sampler2D uMask;
 
-                vec2 a = mod(uv, r) - h;
-                vec2 b = mod(uv - h, r) - h;
+            // Pseudo-random hash
+            float hash21(vec2 p) {
+                p = fract(p * vec2(234.34, 435.345));
+                p += dot(p, p + 34.23);
+                return fract(p.x * p.y);
+            }
 
-                vec2 gv = dot(a, a) < dot(b, b) ? a : b;
-
-                float x = abs(gv.x);
-                float y = abs(gv.y);
-                float dist = 0.5 * r.x - max(x, x * 0.5 + y * 0.866);
-
-                vec2 id = uv - gv;
-
-                return vec4(id, dist, 0.0);
+            // Hexagon distance function
+            float hexDist(vec2 p) {
+                p = abs(p);
+                // The dot product with (1, sqrt(3)) is the distance to the slanted edge
+                float c = dot(p, normalize(vec2(1.0, 1.7320508)));
+                // The max of that and the horizontal distance (p.x) gives the hex shape
+                return max(c, p.x);
             }
 
             void main() {
-                // Use World Position for Grid Coordinates instead of UVs
-                // This ensures the grid continues infinitely regardless of Mesh size/position
-                vec2 uv = vPos * 10.0; // Scale factor (previously vUv * 20.0, plane was 2x2, so 2*10=20. Match scale)
-
-                vec4 h = hexCoords(uv);
-                vec2 id = h.xy;
-                float dist = h.z;
-
-                // Integer-based terrain selection using mod
-                vec2 intId = floor(id + 0.5);
-                float terrainIndex = mod(intId.x + intId.y * 2.0, 3.0);
-
-                // Values from Uniforms
-                vec3 water = uColorWater;
-                vec3 grass = uColorGrass;
-                vec3 dirt = uColorDirt;
-                vec3 waterGlow = uColorWaterGlow;
-                vec3 grassGlow = uColorGrassGlow;
-                vec3 dirtGlow = uColorDirtGlow;
-
-                // Select base color
-                float isWater = 1.0 - step(0.5, terrainIndex);
-                float isGrass = step(0.5, terrainIndex) * (1.0 - step(1.5, terrainIndex));
-                float isDirt = step(1.5, terrainIndex);
-
-                vec3 themeColor = water * isWater + grass * isGrass + dirt * isDirt;
-                vec3 glowColor = waterGlow * isWater + grassGlow * isGrass + dirtGlow * isDirt;
-
-                // --- ISOLATED TILES (HOLLOW OUTLINES) ---
-                float gapSize = uGapSize;
-                float hexMask = smoothstep(gapSize, gapSize + 0.02, dist);
+                // Correct aspect ratio
+                vec2 uv = vUv;
+                uv.x *= uResolution.x / uResolution.y;
                 
-                float outlineWidth = uOutlineWidth;
-                float innerEdge = gapSize + outlineWidth;
-                float innerMask = smoothstep(innerEdge, innerEdge + 0.02, dist);
-                float borderMask = hexMask - innerMask;
+                // Scale
+                uv *= uScale;
                 
-                // Base tile - muted
-                vec3 col = themeColor * borderMask * uOutlineOpacity; 
+                // Read Interaction Mask from Texture
+                // We read at vUv (uncorrected)
+                float maskVal = texture2D(uMask, vUv).r;
                 
-                // --- GLOW EFFECT WHEN REVEALED ---
-                // Sample Vision Texture using Screen Coordinates (gl_FragCoord)
-                vec2 screenUv = gl_FragCoord.xy / uResolution;
-                float revealed = texture2D(uVisionTexture, screenUv).r;
+                // Use the mask as our interaction factor
+                float interact = smoothstep(0.01, 1.0, maskVal);
 
-                float brightness = smoothstep(0.05, 0.6, revealed);
-
-                // When revealed, brighten the outline heavily
-                col += glowColor * borderMask * brightness * 0.9; 
-
-                // Interactive Glow
-                col += glowColor * 0.4 * brightness * borderMask;
-
-                // Rim highlight 
-                float rim = smoothstep(gapSize, gapSize + 0.02, dist) * (1.0 - smoothstep(gapSize + 0.02, gapSize + 0.04, dist));
-                col += glowColor * rim * brightness * 0.6;
+                // Standard hex tiling math:
+                vec2 r = vec2(1.0, 1.7320508);
+                vec2 h = r * 0.5;
                 
-                gl_FragColor = vec4(col, 1.0);
+                vec2 a = mod(uv, r) - h;
+                vec2 b = mod(uv - h, r) - h;
+                
+                vec2 gv;
+                if (length(a) < length(b))
+                    gv = a; // 'a' is closer
+                else
+                    gv = b; // 'b' is closer
+                
+                // Identify the hex
+                vec2 id = uv - gv;
+                
+                // Distance to edge
+                float dist = hexDist(gv);
+                
+                float radius = 0.5;
+                float outer = radius - uGap;
+                float inner = outer - uStrokeWidth;
+                
+                // Fix for artifacts: use fwidth of the continuous UV coordinate instead of the discontinuous dist
+                // The dist function has a gradient of 1.0 (it's a distance field), so the change in dist
+                // per pixel is roughly the same as the change in UV per pixel.
+                float aa = fwidth(uv.y); // uv is already scaled and aspect-corrected
+                
+                // Stroke mask
+                float stroke = smoothstep(inner - aa, inner + aa, dist) - smoothstep(outer - aa, outer + aa, dist);
+                
+                // --- PULSE EFFECT ---
+                float noise = hash21(id);
+                // Generate a sine wave based on time and random offset
+                // Range -1 to 1
+                float rawPulse = sin(uTime * uPulseSpeed + noise * 100.0);
+                
+                // Thresholding to make it sparse
+                // We want it to be 0 most of the time, and spike to 1
+                // Map [-1, 1] to roughly [0, 1] but skewed
+                
+                float threshold = 1.0 - uPulseDensity; // e.g. density 0.1 -> threshold 0.9
+                // If rawPulse > threshold, we light up
+                float pulse = smoothstep(threshold, 1.0, rawPulse);
+                
+                // INTERACTION: Only pulse if mask is active
+                pulse *= interact;
+                
+                // Fill mask (inner part of hex)
+                float fill = 1.0 - smoothstep(inner - aa, inner + aa, dist);
+                
+                // Select Random Stroke Color
+                // We reuse the noise/hash logic
+                // Partition noise [0,1] into 3 buckets
+                vec3 strokeColor = uStrokeColor1;
+                if(noise > 0.33) strokeColor = uStrokeColor2;
+                if(noise > 0.66) strokeColor = uStrokeColor3;
+                
+                // INTERACTION: Glow stroke in masked area
+                strokeColor += uPulseColor * interact * 2.0;
+                
+                vec3 finalColor = vec3(0.0);
+                
+                // Add stroke
+                finalColor = mix(finalColor, strokeColor, stroke);
+                
+                // Add pulse (mixing into fill)
+                // mix existing color with pulse color based on pulse factor * fill mask
+                finalColor = mix(finalColor, uPulseColor, pulse * fill);
+                
+                gl_FragColor = vec4(finalColor, 1.0);
             }
         `;
 
@@ -220,303 +243,106 @@
         const scene = new THREE.Scene();
         const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
         const renderer = new THREE.WebGLRenderer({ alpha: true });
-        const canvasHeight = window.innerHeight * 1.5; // Match 150vh CSS
-        renderer.setSize(window.innerWidth, canvasHeight);
+        
+        const getCanvasSize = () => ({
+            w: window.innerWidth,
+            h: window.innerHeight * 1.5
+        });
+        let canvasSize = getCanvasSize();
+        
+        renderer.setSize(canvasSize.w, canvasSize.h);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
+        // --- PING PONG BUFFERS ---
+        const simRes = 512; 
+        const simParams = {
+            minFilter: THREE.LinearFilter,
+            magFilter: THREE.LinearFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType 
+        };
+        let simBufferA = new THREE.WebGLRenderTarget(simRes, simRes, simParams);
+        let simBufferB = new THREE.WebGLRenderTarget(simRes, simRes, simParams);
+        
+        const simScene = new THREE.Scene();
+        const simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        
+        const simUniforms = {
+            uTexture: { value: null },
+            uMouse: { value: new THREE.Vector2(0, 0) },
+            uResolutionRatio: { value: canvasSize.w / canvasSize.h },
+            uCursorRadius: { value: 8.0 },
+            uDecay: { value: 0.96 },
+            uTime: { value: 0 }
+        };
+        
+        const simMaterial = new THREE.ShaderMaterial({
+            uniforms: simUniforms,
+            vertexShader: simVertexShader,
+            fragmentShader: simFragmentShader
+        });
+        
+        const simQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), simMaterial);
+        simScene.add(simQuad);
+
+        // --- MAIN SCENE ---
         const mainUniforms = {
             uTime: { value: 0 },
-            uResolution: { value: new THREE.Vector2(window.innerWidth, canvasHeight) },
-            uMouse: { value: new THREE.Vector2(0.5, 0.5) },
-            uVisionTexture: { value: null },
-            uScrollOffset: { value: 0 }, // For scroll-based re-fogging
-            // Configurable
-            uColorWater: { value: new THREE.Color('#3e78b6') },
-            uColorGrass: { value: new THREE.Color('#3ba2ce') },
-            uColorDirt: { value: new THREE.Color('#e6b919') },
-            uColorWaterGlow: { value: new THREE.Color('#4a7c82') },
-            uColorGrassGlow: { value: new THREE.Color('#2e4399') },
-            uColorDirtGlow: { value: new THREE.Color('#5a4d5c') },
-            uGapSize: { value: 0.0888 },
-            uOutlineWidth: { value: 0.001 },
-            uOutlineOpacity: { value: 0.321 }
+            uResolution: { value: new THREE.Vector2(canvasSize.w, canvasSize.h) },
+            uScale: { value: 20.0 }, // Initial tile size
+            uStrokeWidth: { value: 0.02 },
+            uGap: { value: 0.01 },
+            // Pulse defaults
+            uPulseSpeed: { value: 2.0 },
+            uPulseDensity: { value: 0.2 }, 
+            uPulseColor: { value: new THREE.Color(0x00ffff) }, // Cyan
+            // Stroke defaults - Dark variations
+            uStrokeColor1: { value: new THREE.Color(0x1a1a2e) }, // Dark Blue
+            uStrokeColor2: { value: new THREE.Color(0x16213e) }, // Slightly lighter Blue
+            uStrokeColor3: { value: new THREE.Color(0x0f3460) },  // Even lighter Blue
+            // Mask from Sim
+            uMask: { value: null } 
         };
 
         // --- MAP GROUP (Container for Map) ---
         const mapGroup = new THREE.Group();
         scene.add(mapGroup);
 
-        const mapGeo = new THREE.PlaneGeometry(10, 20); // Massive Plane to ensure coverage
+        const mapGeo = new THREE.PlaneGeometry(2, 2); // Full screen quad
         const mapMat = new THREE.ShaderMaterial({
             uniforms: mainUniforms,
-            vertexShader: fogVertexShader,
+            vertexShader: mapVertexShader,
             fragmentShader: mapFragmentShader
         });
         const mapPlane = new THREE.Mesh(mapGeo, mapMat);
-        mapPlane.position.z = -0.1;
         mapGroup.add(mapPlane);
 
-        // --- UNITS SCENE (Rendered on top of fog) ---
-        const unitsScene = new THREE.Scene();
-
-        // --- FOG VISION SCENE SETUP (Moved Up for dependencies) ---
-        const visionScene = new THREE.Scene();
-        const visionCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-        
-        // Add User Mouse Brush
-        const visionBrushGeo = new THREE.PlaneGeometry(0.5, 0.5); 
-        const visionBrushMat = new THREE.ShaderMaterial({
-            vertexShader: `
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-            `,
-            fragmentShader: `
-                varying vec2 vUv;
-                void main() {
-                    float dist = length(vUv - 0.5);
-                    float intensity = 1.0 - smoothstep(0.0, 0.5, dist);
-                    intensity = pow(intensity, 2.0);
-                    gl_FragColor = vec4(intensity, 0.0, 0.0, 1.0);
-                }
-            `,
-            transparent: true,
-            blending: THREE.AdditiveBlending 
-        });
-        const visionBrush = new THREE.Mesh(visionBrushGeo, visionBrushMat);
-        visionScene.add(visionBrush);
-
-        // --- DEV UNITS SETUP ---
-        // Cube formation: 3 revealed devs on top row, 2 mystery devs on bottom
-        // Positioned centrally for visibility (camera view is -1 to 1)
-        const devs = [
-            // Top row - revealed devs
-            {
-                name: "Michael Skacal",
-                role: "Technical Director",
-                color: 0xff0000,
-                img: "assets/skacal.png",
-                pos: new THREE.Vector3(-0.4, 0.1, -0.5)
-            },
-            {
-                name: "David Kim",
-                role: "Game Director",
-                color: 0x00ff00,
-                img: "assets/david.png",
-                pos: new THREE.Vector3(0, 0.1, -0.5)
-            },
-            {
-                name: "Ramon Zarate",
-                role: "Principal Engineer",
-                color: 0x0000ff,
-                img: "assets/ramon.png",
-                pos: new THREE.Vector3(0.4, 0.1, -0.5)
-            },
-            // Bottom row - mystery devs
-            {
-                name: "Mystery Dev",
-                role: "Principal Artist",
-                color: 0xffff00,
-                img: "assets/portrait_placeholder.png",
-                pos: new THREE.Vector3(-0.2, -0.3, -0.5)
-            },
-            {
-                name: "Mystery Dev",
-                role: "Art Director",
-                color: 0xff00ff,
-                img: "assets/portrait_placeholder.png",
-                pos: new THREE.Vector3(0.2, -0.3, -0.5)
-            }
-        ];
-
-        const unitMeshes = [];
-        const unitVisionBrushes = [];
-
-        // Box Geometry for Units (large for visibility debugging)
-        const boxGeo = new THREE.BoxGeometry(0.3, 0.3, 0.3); 
-
-        // Create Units and Vision Brushes
-        devs.forEach((dev, i) => {
-            // 1. Unit Mesh (added to main scene for now to debug visibility)
-            const mat = new THREE.MeshBasicMaterial({ color: dev.color, transparent: true, opacity: 0 });
-            const mesh = new THREE.Mesh(boxGeo, mat);
-            mesh.position.copy(dev.pos);
-            mesh.rotation.z = Math.PI / 4; // Diamond orientation
-            mesh.userData = { devIndex: i }; // For Raycasting
-            unitsScene.add(mesh); // Add to units scene (renders on top of fog)
-            unitMeshes.push(mesh);
-
-            // 2. Vision Brush (Separate Scene) - larger reveal area around cubes
-            const brush = new THREE.Mesh(visionBrushGeo, visionBrushMat.clone());
-            brush.scale.set(0.8, 0.8 * (window.innerWidth/window.innerHeight) * 1.5, 1);
-            brush.visible = false; // Hidden until cubes fade in
-            visionScene.add(brush);
-            unitVisionBrushes.push(brush);
-        });
-
-        // --- FOG PERSISTENCE SYSTEM ---
-        // (Vision Scene removed from here as it's now above)
-        
-        const persistenceScene = new THREE.Scene();
-        const persistenceQuadVec = new THREE.PlaneGeometry(2, 2);
-        
-        const persistenceShader = {
-            uniforms: {
-                tDiffuse: { value: null },
-                uDecay: { value: 0.012 } 
-            },
-            vertexShader: `
-                varying vec2 vUv;
-                void main() {
-                    vUv = uv;
-                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-                }
-            `,
-            fragmentShader: `
-                uniform sampler2D tDiffuse;
-                uniform float uDecay;
-                varying vec2 vUv;
-                void main() {
-                    vec4 texel = texture2D(tDiffuse, vUv);
-                    float val = texel.r - uDecay;
-                    gl_FragColor = vec4(val, val, val, 1.0);
-                }
-            `
-        };
-        
-        const persistenceMat = new THREE.ShaderMaterial({
-            uniforms: persistenceShader.uniforms,
-            vertexShader: persistenceShader.vertexShader,
-            fragmentShader: persistenceShader.fragmentShader
-        });
-        const persistenceQuad = new THREE.Mesh(persistenceQuadVec, persistenceMat);
-        persistenceScene.add(persistenceQuad);
-
-        // Render Targets
-        const rtParams = { 
-            minFilter: THREE.LinearFilter, 
-            magFilter: THREE.LinearFilter, 
-            format: THREE.RGBAFormat,
-            type: THREE.FloatType 
-        };
-        let rtA = new THREE.WebGLRenderTarget(window.innerWidth, canvasHeight, rtParams);
-        let rtB = new THREE.WebGLRenderTarget(window.innerWidth, canvasHeight, rtParams);
-
-        // --- MAIN SCENE ---
-        const planeGeo = new THREE.PlaneGeometry(2, 2);
-        const mainMat = new THREE.ShaderMaterial({
-            uniforms: mainUniforms,
-            vertexShader: fogVertexShader,
-            fragmentShader: fogFragmentShader,
-            transparent: true
-        });
-
-        const mainPlane = new THREE.Mesh(planeGeo, mainMat);
-        const fogScene = new THREE.Scene();
-        fogScene.add(mainPlane);
-
-        // --- INTERACTION ---
-        const mouse = new THREE.Vector2(-10, -10);
-        const raycaster = new THREE.Raycaster();
-        raycaster.params.Mesh.threshold = 0.1; // Increase hit detection tolerance
-
-        const tooltip = document.getElementById('dev-tooltip');
-        const tooltipImg = document.getElementById('tooltip-img');
-        const tooltipName = document.getElementById('tooltip-name');
-        const tooltipRole = document.getElementById('tooltip-role');
         const canvasContainer = document.getElementById('canvas-container');
 
-        // Hover state tracking
-        let hoveredCubeIndex = -1;
-        const cubeHoverScale = []; // Track interpolated hover scale for each cube
-        const cubeHoverGlow = []; // Track interpolated glow intensity
-        unitMeshes.forEach(() => {
-            cubeHoverScale.push(1.0);
-            cubeHoverGlow.push(0.0);
-        });
-
-        visionBrush.position.set(-10, -10, 0);
-
+        // Mouse Tracking UPDATE
         document.addEventListener('mousemove', (e) => {
-            // Get current parallax offset for coordinate correction
-            const currentScrollY = window.scrollY;
-            const parallaxOffset = currentScrollY * -0.3;
-            const canvasH = window.innerHeight * 1.5;
-
-            // Vision brush coordinates (viewport-relative for fog reveal)
-            const visionX = (e.clientX / window.innerWidth) * 2 - 1;
-            const visionY = -(e.clientY / window.innerHeight) * 2 + 1;
-
-            // Update Shader Uniform
-            mainUniforms.uMouse.value.x = e.clientX / window.innerWidth;
-            mainUniforms.uMouse.value.y = 1.0 - (e.clientY / window.innerHeight);
-
-            // Move Vision Brush (uses viewport coordinates)
-            visionBrush.position.set(visionX, visionY, 0);
-
-            // --- RAYCASTING FOR TOOLTIP ---
-            // Raycasting needs canvas-relative coordinates accounting for:
-            // 1. Canvas is 150vh tall (not 100vh)
-            // 2. CSS parallax transform shifts the canvas
-            const canvasMouseY = e.clientY - parallaxOffset; // Convert screen Y to canvas Y
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(canvasMouseY / canvasH) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(unitMeshes, false);
-
-            // Reset hover state
-            const previousHovered = hoveredCubeIndex;
-            hoveredCubeIndex = -1;
-
-            if (intersects.length > 0) {
-                const hit = intersects[0];
-                const devIndex = hit.object.userData.devIndex;
-
-                // Only show tooltip if cube is visible (opacity > 0)
-                if (hit.object.material.opacity > 0.1) {
-                    hoveredCubeIndex = devIndex;
-                    const dev = devs[devIndex];
-
-                    // Show Tooltip
-                    tooltip.classList.remove('hidden');
-                    tooltipName.textContent = dev.name;
-                    tooltipRole.textContent = dev.role;
-                    tooltipImg.src = dev.img;
-
-                    // Position Tooltip
-                    tooltip.style.left = e.clientX + 'px';
-                    tooltip.style.top = e.clientY + 'px';
-                } else {
-                    tooltip.classList.add('hidden');
-                }
-            } else {
-                tooltip.classList.add('hidden');
-            }
+            const rect = renderer.domElement.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Normalize to 0-1, y flipped for UV
+            const u = x / rect.width;
+            const v = 1.0 - (y / rect.height);
+            
+            simUniforms.uMouse.value.set(u, v);
         });
 
         // Resize
         window.addEventListener('resize', () => {
-             const w = window.innerWidth;
-             const h = window.innerHeight;
-             const canvasH = h * 1.5; // Match 150vh CSS
-             renderer.setSize(w, canvasH);
-             rtA.setSize(w, canvasH);
-             rtB.setSize(w, canvasH);
-             mainUniforms.uResolution.value.set(w, canvasH);
-             composer.setSize(w, canvasH);
-             const aspect = w / h;
-             visionBrush.scale.set(1, aspect * 1.5, 1); // Adjust for taller canvas
-
-             // Update Unit Brush Aspect
-             unitVisionBrushes.forEach(b => {
-                 b.scale.set(0.8, 0.8 * aspect * 1.5, 1);
-             });
+             canvasSize = getCanvasSize();
+             renderer.setSize(canvasSize.w, canvasSize.h);
+             composer.setSize(canvasSize.w, canvasSize.h);
+             
+             // Update shader uniforms
+             mainUniforms.uResolution.value.set(canvasSize.w, canvasSize.h);
+             simUniforms.uResolutionRatio.value = canvasSize.w / canvasSize.h;
         });
-        
-        visionBrush.scale.set(1, (window.innerWidth/window.innerHeight) * 1.5, 1);
 
         // A-Move Click Effect
         document.addEventListener('click', (e) => {
@@ -565,51 +391,53 @@
 
         // --- DEBUG GUI ---
         const gui = new GUI({ title: 'A-Move Debug' });
-        
+
         const settings = {
-            water: '#050d1a',
-            grass: '#05141f',
-            dirt: '#0d0526',
-            waterGlow: '#00ccff',
-            grassGlow: '#0080ff',
-            dirtGlow: '#9900ff',
-            // Dev Cubes Settings
-            cubeOffsetX: 0,
-            cubeOffsetY: -0.152,
-            cubeSize: 0.08055,
-            cubeTiltX: -44.46,
-            cubeTiltY: 0,
-            cubeSpacing: 1.0,
             // Scroll tracking
             scrollY: 0,
             scrollPercent: 0,
+            // Hex Pattern Defaults
+            scale: 20.0,
+            strokeWidth: 0.02,
+            gap: 0.01,
+            // Pulse Defaults
+            pulseSpeed: 2.0,
+            pulseDensity: 0.05,
+            pulseColor: { r: 0, g: 1, b: 1 }, 
+            // Stroke Defaults
+            strokeColor1: { r: 0.1, g: 0.1, b: 0.18 }, // #1a1a2e
+            strokeColor2: { r: 0.08, g: 0.13, b: 0.24 }, // #16213e
+            strokeColor3: { r: 0.06, g: 0.2, b: 0.37 }, // #0f3460
+            
+            // Interaction
+            cursorRadius: 8.0,
+            decay: 0.96, // Decay
+            
             export: function() {
                 const config = {
-                    colors: {
-                        water: settings.water,
-                        grass: settings.grass,
-                        dirt: settings.dirt,
-                        waterGlow: settings.waterGlow,
-                        grassGlow: settings.grassGlow,
-                        dirtGlow: settings.dirtGlow
-                    },
-                    geometry: {
-                        gapSize: mainUniforms.uGapSize.value,
-                        outlineWidth: mainUniforms.uOutlineWidth.value,
-                        outlineOpacity: mainUniforms.uOutlineOpacity.value
-                    },
                     typography: {
                         scanThickness: settings.scanThickness,
                         scanGap: settings.scanGap,
                         titleGlow: settings.titleGlow
                     },
-                    devCubes: {
-                        offsetX: settings.cubeOffsetX,
-                        offsetY: settings.cubeOffsetY,
-                        size: settings.cubeSize,
-                        tiltX: settings.cubeTiltX,
-                        tiltY: settings.cubeTiltY,
-                        spacing: settings.cubeSpacing
+                    hexPattern: {
+                        scale: settings.scale,
+                        strokeWidth: settings.strokeWidth,
+                        gap: settings.gap
+                    },
+                    pulse: {
+                        speed: settings.pulseSpeed,
+                        density: settings.pulseDensity,
+                        color: settings.pulseColor
+                    },
+                    strokeColors: {
+                        c1: settings.strokeColor1,
+                        c2: settings.strokeColor2,
+                        c3: settings.strokeColor3
+                    },
+                    interaction: {
+                        radius: settings.cursorRadius,
+                        decay: settings.decay
                     }
                 };
                 const json = JSON.stringify(config, null, 2);
@@ -624,60 +452,11 @@
             devsGlow: 4
         };
 
-        // Base positions for dev cubes (before offset/spacing applied)
-        const basePositions = [
-            { x: -0.4, y: 0.1 },   // Michael
-            { x: 0, y: 0.1 },      // David
-            { x: 0.4, y: 0.1 },    // Ramon
-            { x: -0.2, y: -0.3 },  // Mystery 1
-            { x: 0.2, y: -0.3 }    // Mystery 2
-        ];
-
-        // Function to update cube transforms from GUI
-        function updateCubeTransforms() {
-            unitMeshes.forEach((mesh, i) => {
-                // Apply position offset and spacing
-                mesh.position.x = basePositions[i].x * settings.cubeSpacing + settings.cubeOffsetX;
-                mesh.position.y = basePositions[i].y * settings.cubeSpacing + settings.cubeOffsetY;
-
-                // Apply size
-                mesh.scale.setScalar(settings.cubeSize / 0.3); // Normalize to base size
-
-                // Note: Tilt (rotation.x, rotation.y) is applied in animate loop
-                // Z rotation is also in animate loop for continuous spin
-            });
-        }
-
         // Sync Helper
-        function updateColor(name, uniform) {
-            mainUniforms[uniform].value.set(settings[name]);
-        }
         function updateCSS(varName, value, unit='px') {
             document.documentElement.style.setProperty(varName, value + unit);
         }
 
-        // Initialize gui with current uniform values
-        settings.water = '#' + mainUniforms.uColorWater.value.getHexString();
-        settings.grass = '#' + mainUniforms.uColorGrass.value.getHexString();
-        settings.dirt = '#' + mainUniforms.uColorDirt.value.getHexString();
-        settings.waterGlow = '#' + mainUniforms.uColorWaterGlow.value.getHexString();
-        settings.grassGlow = '#' + mainUniforms.uColorGrassGlow.value.getHexString();
-        settings.dirtGlow = '#' + mainUniforms.uColorDirtGlow.value.getHexString();
-
-        const fColors = gui.addFolder('Theme Colors');
-        fColors.addColor(settings, 'water').name('Base 1 (Water)').onChange(() => updateColor('water', 'uColorWater'));
-        fColors.addColor(settings, 'grass').name('Base 2 (Grass)').onChange(() => updateColor('grass', 'uColorGrass'));
-        fColors.addColor(settings, 'dirt').name('Base 3 (Dirt)').onChange(() => updateColor('dirt', 'uColorDirt'));
-        
-        const fGlow = gui.addFolder('Glow Colors');
-        fGlow.addColor(settings, 'waterGlow').name('Glow 1').onChange(() => updateColor('waterGlow', 'uColorWaterGlow'));
-        fGlow.addColor(settings, 'grassGlow').name('Glow 2').onChange(() => updateColor('grassGlow', 'uColorGrassGlow'));
-        fGlow.addColor(settings, 'dirtGlow').name('Glow 3').onChange(() => updateColor('dirtGlow', 'uColorDirtGlow'));
-
-        const fGeo = gui.addFolder('Geometry');
-        fGeo.add(mainUniforms.uGapSize, 'value', 0.0, 0.2).name('Gap Size');
-        fGeo.add(mainUniforms.uOutlineWidth, 'value', 0.001, 0.1).name('Outline Width');
-        fGeo.add(mainUniforms.uOutlineOpacity, 'value', 0.0, 1.0).name('Base Opacity');
 
         const fTypo = gui.addFolder('Typography');
         fTypo.add(settings, 'scanThickness', 1, 10).name('Scan Thickness').onChange(v => updateCSS('--scan-thickness', v));
@@ -688,132 +467,75 @@
             updateCSS('--devs-glow-2', v * 2);
             updateCSS('--devs-glow-3', v * 3);
         });
-
+        
+        const fHex = gui.addFolder('Hex Background');
+        fHex.add(settings, 'scale', 5.0, 100.0).name('Tile Scale').onChange(v => mainUniforms.uScale.value = v);
+        fHex.add(settings, 'strokeWidth', 0.001, 0.2).name('Stroke Width').onChange(v => mainUniforms.uStrokeWidth.value = v);
+        fHex.add(settings, 'gap', 0.0, 0.2).name('Tile Gap').onChange(v => mainUniforms.uGap.value = v);
+        
+        const fStroke = fHex.addFolder('Stroke Colors');
+        fStroke.addColor(settings, 'strokeColor1').name('Color 1').onChange(v => mainUniforms.uStrokeColor1.value.setRGB(v.r, v.g, v.b));
+        fStroke.addColor(settings, 'strokeColor2').name('Color 2').onChange(v => mainUniforms.uStrokeColor2.value.setRGB(v.r, v.g, v.b));
+        fStroke.addColor(settings, 'strokeColor3').name('Color 3').onChange(v => mainUniforms.uStrokeColor3.value.setRGB(v.r, v.g, v.b));
+        
+        const fPulse = fHex.addFolder('Pulse Effect');
+        fPulse.add(settings, 'pulseSpeed', 0.0, 10.0).name('Speed').onChange(v => mainUniforms.uPulseSpeed.value = v);
+        fPulse.add(settings, 'pulseDensity', 0.0, 0.5).name('Density').onChange(v => mainUniforms.uPulseDensity.value = v);
+        fPulse.addColor(settings, 'pulseColor').name('Color').onChange(v => {
+            mainUniforms.uPulseColor.value.setRGB(v.r, v.g, v.b);
+        });
+        
+        const fInteract = fHex.addFolder('Interaction');
+        fInteract.add(settings, 'cursorRadius', 1.0, 20.0).name('Radius').onChange(v => simUniforms.uCursorRadius.value = v);
+        fInteract.add(settings, 'decay', 0.8, 0.999).name('Trail Persistence').onChange(v => simUniforms.uDecay.value = v);
+        
+        fHex.open();
+        
         const fBloom = gui.addFolder('Bloom');
         fBloom.add(bloomPass, 'strength', 0.0, 5.0).name('Strength');
         fBloom.add(bloomPass, 'radius', 0.0, 1.0).name('Radius');
         fBloom.add(bloomPass, 'threshold', 0.0, 1.0).name('Threshold');
-
-        const fCubes = gui.addFolder('Dev Cubes');
-        fCubes.add(settings, 'cubeOffsetX', -2, 2).name('Offset X').onChange(updateCubeTransforms);
-        fCubes.add(settings, 'cubeOffsetY', -2, 2).name('Offset Y').onChange(updateCubeTransforms);
-        fCubes.add(settings, 'cubeSize', 0.05, 0.5).name('Size').onChange(updateCubeTransforms);
-        fCubes.add(settings, 'cubeTiltX', -90, 90).name('Tilt X (deg)').onChange(updateCubeTransforms);
-        fCubes.add(settings, 'cubeTiltY', -90, 90).name('Tilt Y (deg)').onChange(updateCubeTransforms);
-        fCubes.add(settings, 'cubeSpacing', 0.5, 2.0).name('Spacing').onChange(updateCubeTransforms);
-
+        
         const fScroll = gui.addFolder('Scroll Info');
         const scrollYController = fScroll.add(settings, 'scrollY').name('Scroll Y (px)').listen().disable();
         const scrollPercentController = fScroll.add(settings, 'scrollPercent').name('Scroll %').listen().disable();
-        fScroll.open();
+        // fScroll.open();
 
         gui.add(settings, 'export').name('💾 EXPORT SETTINGS');
 
-        // Apply initial cube transforms with new defaults
-        updateCubeTransforms();
-
         function animate() {
             requestAnimationFrame(animate);
-            
             const dt = clock.getDelta();
             mainUniforms.uTime.value = clock.getElapsedTime();
-
-            // --- PARALLAX UPDATE ---
-            // CSS transform makes canvas scroll slower than HTML content
-            // Negative value moves canvas UP (same direction as scrolling content, but slower)
+            
+            // --- STEP 1: RENDER SIMULATION ---
+            // Sim Buffer Swap
+            const bufferRead = simBufferA;
+            const bufferWrite = simBufferB;
+            
+            simUniforms.uTexture.value = bufferRead.texture;
+            
+            renderer.setRenderTarget(bufferWrite);
+            renderer.render(simScene, simCamera);
+            
+            // Pass the new texture to the main shader
+            mainUniforms.uMask.value = bufferWrite.texture;
+            
+            // Swap Buffers for next frame
+            simBufferA = bufferWrite;
+            simBufferB = bufferRead;
+            
+            // --- STEP 2: RENDER MAIN SCENE ---
+            renderer.setRenderTarget(null); // Screen
+            
+            // Parallax
             const scrollY = window.scrollY;
-            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-            const parallaxOffset = scrollY * -0.3; // Background scrolls at 30% speed
+            const parallaxOffset = scrollY * -0.3; 
             canvasContainer.style.transform = `translateY(${parallaxOffset}px)`;
-
-            // Update scroll offset for fog re-fogging (normalized 0-1 range)
-            const canvasH = window.innerHeight * 1.5;
-            mainUniforms.uScrollOffset.value = -parallaxOffset / canvasH;
-
-            // Update scroll tracking for GUI
+            
             settings.scrollY = Math.round(scrollY);
-            settings.scrollPercent = maxScroll > 0 ? Math.round((scrollY / maxScroll) * 100) : 0;
 
-            // --- CUBE FADE BASED ON SCROLL ---
-            // Hidden until scrollY=700, fade in from 700-1000, fully visible at 1000+
-            let cubeOpacity = 0;
-            if (scrollY >= 1000) {
-                cubeOpacity = 1;
-            } else if (scrollY > 700) {
-                cubeOpacity = (scrollY - 700) / 300; // 0 to 1 over 300px
-            }
-
-            // --- UNIT ANIMATION & VISION UPDATE ---
-            unitMeshes.forEach((mesh, i) => {
-                // Apply opacity fade
-                mesh.material.opacity = cubeOpacity;
-
-                // --- HOVER EFFECT INTERPOLATION ---
-                const isHovered = (hoveredCubeIndex === i);
-                const targetScale = isHovered ? 1.4 : 1.0;
-                const targetGlow = isHovered ? 1.0 : 0.0;
-
-                // Smooth interpolation (lerp)
-                const lerpSpeed = 8.0 * dt;
-                cubeHoverScale[i] += (targetScale - cubeHoverScale[i]) * lerpSpeed;
-                cubeHoverGlow[i] += (targetGlow - cubeHoverGlow[i]) * lerpSpeed;
-
-                // Apply hover glow - blend towards white/bright
-                const baseColor = new THREE.Color(devs[i].color);
-                const glowColor = new THREE.Color(0xffffff);
-                mesh.material.color.copy(baseColor).lerp(glowColor, cubeHoverGlow[i] * 0.5);
-
-                // Bobbing Animation
-                mesh.position.z = -0.5 + Math.sin(clock.getElapsedTime() * 2.0 + i) * 0.02;
-
-                // Apply tilt from settings (preserved during animation)
-                mesh.rotation.x = settings.cubeTiltX * Math.PI / 180;
-                mesh.rotation.y = settings.cubeTiltY * Math.PI / 180;
-
-                // Z rotation spin (diamond base + continuous rotation) - faster when hovered
-                const baseRotZ = Math.PI / 4;
-                const spinSpeed = 0.5 + cubeHoverGlow[i] * 1.5; // Spin faster on hover
-                mesh.rotation.z = baseRotZ + clock.getElapsedTime() * spinSpeed;
-
-                // Apply hover scale on top of base size
-                const baseScale = settings.cubeSize / 0.3;
-                mesh.scale.setScalar(baseScale * cubeHoverScale[i]);
-
-                // Sync Vision Brush to cube position (only reveal when visible)
-                unitVisionBrushes[i].position.set(mesh.position.x, mesh.position.y, 0);
-                unitVisionBrushes[i].visible = cubeOpacity > 0;
-            });
-
-            // Step 1: Decay (rtB -> rtA)
-            persistenceMat.uniforms.tDiffuse.value = rtB.texture;
-            renderer.setRenderTarget(rtA);
-            renderer.render(persistenceScene, visionCamera);
-            
-            // Step 2: Draw Brush (Additively on top of rtA)
-            renderer.autoClear = false; 
-            renderer.render(visionScene, visionCamera);
-            renderer.autoClear = true; 
-            
-            // Step 3: Composer Rendering (Map + Bloom)
-            mainUniforms.uVisionTexture.value = rtA.texture;
-            
             composer.render();
-
-            // Step 4: Render Fog (No Bloom, On Top)
-            renderer.setRenderTarget(null);
-            renderer.autoClear = false;
-            renderer.clearDepth();
-            renderer.render(fogScene, camera);
-
-            // Step 5: Render Units (On top of fog, always visible)
-            renderer.clearDepth();
-            renderer.render(unitsScene, camera);
-            renderer.autoClear = true;
-
-            // Swap Buffers
-            let temp = rtA;
-            rtA = rtB;
-            rtB = temp;
         }
         animate();
     </script>
