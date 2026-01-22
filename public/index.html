@@ -33,8 +33,8 @@
                 <span><span class="text-scanline title-orange">A</span><span class="text-scanline title-white">-MOVE</span></span>
                 <span class="text-scanline title-cyan">GAMES</span>
             </div>
-            <div class="hero-subtitle">EST. 2026 USA//CANADA aka North North Dakota</div>
-            <div class="hero-quote">Fast Action Real-Time Strategy Rebooted.</div>
+            <div class="hero-subtitle">EST. 2026 // North America</div>
+            <div class="hero-quote">Fast Action Real-Time Strategy</div>
         </section>
 
         <section id="devs" class="section-devs">
@@ -174,6 +174,9 @@
             }
 
             void main() {
+                vec2 uv = vUv;
+                uv.x *= uResolution.x / uResolution.y;
+                
                 // Scale
                 uv *= uScale;
                 
