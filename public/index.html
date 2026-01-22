@@ -158,14 +158,9 @@
                 // Scale
                 uv *= uScale;
                 
-                // Read Interaction Mask from Texture
-                // We read at vUv (uncorrected)
-                float maskVal = texture2D(uMask, vUv).r;
-                
-                // Use the mask as our interaction factor
-                float interact = smoothstep(0.01, 1.0, maskVal);
-
-                // Standard hex tiling math:
+                // --- ROBUST HEX TILING ---
+                // Based on "The Art of Code" / IQ method for robust IDs
+                // 1. Skew the UVs
                 vec2 r = vec2(1.0, 1.7320508);
                 vec2 h = r * 0.5;
                 
@@ -173,31 +168,86 @@
                 vec2 b = mod(uv - h, r) - h;
                 
                 vec2 gv;
-                if (length(a) < length(b))
-                    gv = a; // 'a' is closer
+                // Add epsilon to avoid flickering at exact tie
+                if (dot(a, a) < dot(b, b) + 1e-4)
+                    gv = a; 
                 else
-                    gv = b; // 'b' is closer
+                    gv = b; 
                 
-                // Identify the hex
-                vec2 id = uv - gv;
+                // Robust ID calculation using skewed coordinates
+                // We convert back to skewed grid to find integer ID
+                // Transformation matrix to skewed grid:
+                // x' = x/1.0 - y/(sqrt(3)) * (1/sqrt(3)?)  -- wait, let's use the proven "floor" method directly if we want new logic.
+                // Actually, the artifact is likely 'id' jitter.
+                // Let's recalculate ID from the center 'gv' which is stable relative to uv.
+                // id = uv - gv is correct... UNLESS uv is large and float precision loss happens. 
+                // With uScale=20 it should be fine.
                 
-                // Distance to edge
+                // Alternative hypothesis: The "Horizontal/Vertical lines" are typically from fract or mod boundaries.
+                // Let's force ID to be integer-based to align perfectly.
+                
+                vec2 id = uv - gv; 
+                
+                // Round ID to nearest "hex grid integer coordinate" to snap it perfectly
+                // For now, let's trust the 'gv' logic but fix the hash.
+                
+                // --- FIX: Recalculate ID based on integer grid logic to avoid float jitter ---
+                // Skew constants
+                const float s3 = 1.7320508;
+                vec2 s = vec2(1, s3);
+                
+                // Convert to skewed grid
+                vec2 skewed = uv * vec2(1.0, 1.0/s3);
+                vec2 rectID = floor(skewed);
+                
+                // Logic to select the specific hex ID from likely candidates is complex.
+                // Simpler fix: Snap 'id' to a grid.
+                // The centers are at multiples of r.x and r.y/2.
+                // Let's define ID simply as the center position.
+                // id = floor(id * 10.0 + 0.5) / 10.0; // Snap to 0.1 precision? No.
+                
+                // THE REAL FIX:
+                // Artifacts "alternate horizontal and vertical". This is characteristic of hash21 inputting floating point numbers that have tiny errors.
+                // We MUST pass stable integers to hash21.
+                
+                // Convert center position (id) to stable sortable integers.
+                // Grid: X spacing 1.0, Y spacing sqrt(3).
+                // Rows are offset.
+                
+                vec2 gridId;
+                // Manually implement round() for GLSL 1.0 compatibility: floor(x + 0.5)
+                gridId.y = floor(id.y / (s3 * 0.5) + 0.5); // Row index (integer)
+                
+                // X is offset by 0.5 on odd rows
+                float rowOffset = mod(gridId.y, 2.0) * 0.5;
+                gridId.x = floor(id.x - rowOffset + 0.5); // Col index
+                
+                // Use this integer grid ID for noise!
+                vec2 noiseInput = gridId; 
+                
+                // --- RESTORE INTERACTION LOGIC ---
+                // Read Interaction Mask from Texture
+                float maskVal = texture2D(uMask, vUv).r;
+                float interact = smoothstep(0.01, 1.0, maskVal); 
+                
                 float dist = hexDist(gv);
                 
                 float radius = 0.5;
                 float outer = radius - uGap;
                 float inner = outer - uStrokeWidth;
+
+                // Stable AA based on resolution (no fwidth artifacts)
+                float aa = uScale / uResolution.y * 1.5; 
                 
-                // Fix for artifacts: use fwidth of the continuous UV coordinate instead of the discontinuous dist
-                // The dist function has a gradient of 1.0 (it's a distance field), so the change in dist
-                // per pixel is roughly the same as the change in UV per pixel.
-                float aa = fwidth(uv.y); // uv is already scaled and aspect-corrected
+                // Stroke mask
                 
                 // Stroke mask
                 float stroke = smoothstep(inner - aa, inner + aa, dist) - smoothstep(outer - aa, outer + aa, dist);
                 
                 // --- PULSE EFFECT ---
-                float noise = hash21(id);
+                // USE ROBUST NOISE INPUT
+                float noise = hash21(noiseInput); 
+                
                 // Generate a sine wave based on time and random offset
                 // Range -1 to 1
                 float rawPulse = sin(uTime * uPulseSpeed + noise * 100.0);
@@ -253,6 +303,67 @@
         renderer.setSize(canvasSize.w, canvasSize.h);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
         document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // --- SETTINGS (Defaults) ---
+        const settings = {
+            // Scroll tracking
+            scrollY: 0,
+            scrollPercent: 0,
+            // Hex Pattern Defaults
+            scale: 43.985,
+            strokeWidth: 0.006766,
+            gap: 0.01,
+            // Pulse Defaults
+            pulseSpeed: 7.78,
+            pulseDensity: 0.428,
+            pulseColor: { r: 0.12156862745098039, g: 0, b: 0.09803921568627451 }, 
+            // Stroke Defaults
+            strokeColor1: { r: 0.1, g: 0.1, b: 0.18 }, 
+            strokeColor2: { r: 0.08, g: 0.13, b: 0.24 }, 
+            strokeColor3: { r: 0.06, g: 0.2, b: 0.37 }, 
+            
+            // Interaction
+            cursorRadius: 20.0,
+            decay: 0.96, // Decay
+            
+            export: function() {
+                const config = {
+                    typography: {
+                        scanThickness: settings.scanThickness,
+                        scanGap: settings.scanGap,
+                        titleGlow: settings.titleGlow
+                    },
+                    hexPattern: {
+                        scale: settings.scale,
+                        strokeWidth: settings.strokeWidth,
+                        gap: settings.gap
+                    },
+                    pulse: {
+                        speed: settings.pulseSpeed,
+                        density: settings.pulseDensity,
+                        color: settings.pulseColor
+                    },
+                    strokeColors: {
+                        c1: settings.strokeColor1,
+                        c2: settings.strokeColor2,
+                        c3: settings.strokeColor3
+                    },
+                    interaction: {
+                        radius: settings.cursorRadius,
+                        decay: settings.decay
+                    }
+                };
+                const json = JSON.stringify(config, null, 2);
+                console.log("--- SAVED CONFIG ---");
+                console.log(json);
+                alert("Settings exported to Console (F12)!");
+            },
+            // Typography State
+            scanThickness: 7.254,
+            scanGap: 0,
+            titleGlow: 6.5,
+            devsGlow: 4
+        };
 
         // --- PING PONG BUFFERS ---
         const simRes = 512; 
@@ -272,8 +383,8 @@
             uTexture: { value: null },
             uMouse: { value: new THREE.Vector2(0, 0) },
             uResolutionRatio: { value: canvasSize.w / canvasSize.h },
-            uCursorRadius: { value: 8.0 },
-            uDecay: { value: 0.96 },
+            uCursorRadius: { value: settings.cursorRadius },
+            uDecay: { value: settings.decay },
             uTime: { value: 0 }
         };
         
@@ -290,17 +401,17 @@
         const mainUniforms = {
             uTime: { value: 0 },
             uResolution: { value: new THREE.Vector2(canvasSize.w, canvasSize.h) },
-            uScale: { value: 20.0 }, // Initial tile size
-            uStrokeWidth: { value: 0.02 },
-            uGap: { value: 0.01 },
+            uScale: { value: settings.scale }, // Initial tile size
+            uStrokeWidth: { value: settings.strokeWidth },
+            uGap: { value: settings.gap },
             // Pulse defaults
-            uPulseSpeed: { value: 2.0 },
-            uPulseDensity: { value: 0.2 }, 
-            uPulseColor: { value: new THREE.Color(0x00ffff) }, // Cyan
+            uPulseSpeed: { value: settings.pulseSpeed },
+            uPulseDensity: { value: settings.pulseDensity }, 
+            uPulseColor: { value: new THREE.Color(settings.pulseColor.r, settings.pulseColor.g, settings.pulseColor.b) },
             // Stroke defaults - Dark variations
-            uStrokeColor1: { value: new THREE.Color(0x1a1a2e) }, // Dark Blue
-            uStrokeColor2: { value: new THREE.Color(0x16213e) }, // Slightly lighter Blue
-            uStrokeColor3: { value: new THREE.Color(0x0f3460) },  // Even lighter Blue
+            uStrokeColor1: { value: new THREE.Color(settings.strokeColor1.r, settings.strokeColor1.g, settings.strokeColor1.b) },
+            uStrokeColor2: { value: new THREE.Color(settings.strokeColor2.r, settings.strokeColor2.g, settings.strokeColor2.b) },
+            uStrokeColor3: { value: new THREE.Color(settings.strokeColor3.r, settings.strokeColor3.g, settings.strokeColor3.b) },
             // Mask from Sim
             uMask: { value: null } 
         };
@@ -392,65 +503,7 @@
         // --- DEBUG GUI ---
         const gui = new GUI({ title: 'A-Move Debug' });
 
-        const settings = {
-            // Scroll tracking
-            scrollY: 0,
-            scrollPercent: 0,
-            // Hex Pattern Defaults
-            scale: 20.0,
-            strokeWidth: 0.02,
-            gap: 0.01,
-            // Pulse Defaults
-            pulseSpeed: 2.0,
-            pulseDensity: 0.05,
-            pulseColor: { r: 0, g: 1, b: 1 }, 
-            // Stroke Defaults
-            strokeColor1: { r: 0.1, g: 0.1, b: 0.18 }, // #1a1a2e
-            strokeColor2: { r: 0.08, g: 0.13, b: 0.24 }, // #16213e
-            strokeColor3: { r: 0.06, g: 0.2, b: 0.37 }, // #0f3460
-            
-            // Interaction
-            cursorRadius: 8.0,
-            decay: 0.96, // Decay
-            
-            export: function() {
-                const config = {
-                    typography: {
-                        scanThickness: settings.scanThickness,
-                        scanGap: settings.scanGap,
-                        titleGlow: settings.titleGlow
-                    },
-                    hexPattern: {
-                        scale: settings.scale,
-                        strokeWidth: settings.strokeWidth,
-                        gap: settings.gap
-                    },
-                    pulse: {
-                        speed: settings.pulseSpeed,
-                        density: settings.pulseDensity,
-                        color: settings.pulseColor
-                    },
-                    strokeColors: {
-                        c1: settings.strokeColor1,
-                        c2: settings.strokeColor2,
-                        c3: settings.strokeColor3
-                    },
-                    interaction: {
-                        radius: settings.cursorRadius,
-                        decay: settings.decay
-                    }
-                };
-                const json = JSON.stringify(config, null, 2);
-                console.log("--- SAVED CONFIG ---");
-                console.log(json);
-                alert("Settings exported to Console (F12)!");
-            },
-            // Typography State
-            scanThickness: 6.66,
-            scanGap: 0,
-            titleGlow: 13.6,
-            devsGlow: 4
-        };
+
 
         // Sync Helper
         function updateCSS(varName, value, unit='px') {
