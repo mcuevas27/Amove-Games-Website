@@ -514,7 +514,8 @@
         );
         composer.addPass(bloomPass);
 
-        const gui = new GUI({ title: 'A-Move Debug', closed: true });
+        const gui = new GUI({ title: 'A-Move Debug', closed: true, load: false });
+        gui.close();
 
 
 
