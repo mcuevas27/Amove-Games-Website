@@ -17,13 +17,22 @@
 <body>
     <!-- Fixed Background -->
     <div id="canvas-container"></div>
+    <div class="vignette"></div>
 
-
+    <!-- Navigation -->
+    <nav class="main-nav">
+        <ul>
+            <li><a href="#hero">HOME</a></li>
+            <li><a href="#devs">DEVS</a></li>
+            <li><a href="#goals">GOALS</a></li>
+            <li><a href="#contact">CONTACT</a></li>
+        </ul>
+    </nav>
 
     <!-- Scrollable Content -->
     <main>
         <!-- Hero Section -->
-        <section class="section-hero">
+        <section id="hero" class="section-hero">
             <div class="hero-title">
                 <span><span class="text-scanline title-orange">A</span><span class="text-scanline title-white">-MOVE</span></span>
                 <span class="text-scanline title-cyan">GAMES</span>
@@ -33,8 +42,29 @@
         </section>
 
         <!-- Devs Section -->
-        <section class="section-devs">
+        <section id="devs" class="section-devs">
             <h2 class="text-scanline title-cyan">DEVS</h2>
+            <div class="content-placeholder">
+                <div class="placeholder-text">DEV CONTENT GOES HERE</div>
+            </div>
+        </section>
+
+        <!-- Goals Section -->
+        <section id="goals" class="section-goals">
+            <h2 class="text-scanline title-orange">GOALS & VALUES</h2>
+            <div class="content-placeholder">
+                <div class="placeholder-text">GOALS CONTENT GOES HERE</div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section id="contact" class="section-contact">
+             <h2 class="text-scanline title-white">CONTACT</h2>
+             <div class="contact-links">
+                 <a href="#" class="contact-link">TWITTER/X</a>
+                 <a href="#" class="contact-link">DISCORD</a>
+                 <a href="mailto:contact@amove.games" class="contact-link">EMAIL</a>
+             </div>
         </section>
 
     </main>
