@@ -80,9 +80,16 @@
 
         <section id="devs" class="section-devs">
             <h2 class="text-scanline title-cyan">DEVS</h2>
-            <div class="content-placeholder">
-                <div class="placeholder-text">DEV CONTENT GOES HERE</div>
-            </div>
+            <!-- New Embedded Container -->
+            <div id="devs-map-container" class="devs-map-container"></div>
+            
+            <script type="module">
+                import { initDevsMap } from '../src/js/DevsMap.js';
+                // Trigger init when DOM is ready
+                window.addEventListener('load', () => {
+                    initDevsMap('devs-map-container');
+                });
+            </script>
         </section>
 
         <section id="contact" class="section-contact">

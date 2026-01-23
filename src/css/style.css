@@ -1,0 +1,704 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+body {
+  margin: 0;
+  background: #050510;
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  
+  /* IMPORTANT: Ensure no transforms on body to break fixed elements */
+  transform: none !important;
+  filter: none !important;
+  perspective: none !important;
+  
+  overflow-x: hidden;
+  /* Allow standard scrolling */
+  overflow-y: auto; 
+}
+
+html {
+    scroll-behavior: smooth;
+    transform: none !important;
+}
+
+/* Debug GUI - above navigation */
+.lil-gui {
+    z-index: 10001 !important;
+}
+
+/* Fixed Background Canvas */
+#canvas-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 150vh; /* Extra height to prevent cutoff during parallax scroll */
+  z-index: -1;
+  pointer-events: auto; /* Allow mouse interaction for the brush */
+}
+
+/* CRT Overlay - Fixed on top of everything */
+body::after {
+    content: " ";
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    z-index: 999;
+    background-size: 100% 2px, 3px 100%;
+    pointer-events: none;
+}
+
+/* Vignette Overlay */
+.vignette {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background: radial-gradient(circle, transparent 60%, black 100%);
+    z-index: 998; /* Below CRT (999) but above content */
+}
+
+/* --- NAVIGATION --- */
+.main-nav {
+    /* Fixed placement */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 10000;
+    
+    /* Visuals */
+    padding: 1.5rem 0;
+    background: rgba(5, 5, 16, 0.95); /* Solid semi-transparent background */
+    border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+    
+    /* Performance & Rendering Fixes */
+    /* transform: translateZ(0); Removed to prevent potential fixed-pos stacking issues */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+.main-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+}
+
+.main-nav a {
+    color: #3ba2ce;
+    text-decoration: none;
+    font-size: 1.1rem;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+    transition: all 0.3s ease;
+    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+}
+
+.main-nav a:hover {
+    color: #fff;
+    text-shadow: 0 0 10px #00ffff;
+    border-color: rgba(0, 255, 255, 0.3);
+    background: rgba(0, 255, 255, 0.05);
+}
+
+/* --- HERO SECTION --- */
+.section-hero {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+}
+
+.hero-title {
+    font-size: 12vw; /* Massive viewport-based size */
+    margin: 0;
+    line-height: 0.9;
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
+    justify-content: center;
+    gap: 2vw;
+    font-weight: 900;
+    text-transform: uppercase;
+    width: 100%;
+}
+
+/* Scanline Text Effect */
+:root {
+    --scan-thickness: 6.66px;
+    --scan-gap: 0px;
+    --title-glow: 13.6px;
+    --devs-glow-1: 4px;
+    --devs-glow-2: 8px;
+    --devs-glow-3: 12px;
+}
+
+.text-scanline {
+    background-image: repeating-linear-gradient(
+        to bottom,
+        var(--scan-color) 0px,
+        var(--scan-color) var(--scan-thickness),
+        transparent var(--scan-thickness),
+        transparent calc(var(--scan-thickness) + var(--scan-gap))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+    filter: drop-shadow(0 0 var(--title-glow) var(--scan-color));
+}
+
+.title-white {
+    --scan-color: #e0e0e0;
+}
+
+.title-cyan {
+    --scan-color: #00ffff;
+    filter: drop-shadow(0 0 15px rgba(0,255,255,0.8));
+}
+
+.title-orange {
+    --scan-color: #ffaa00;
+    filter: drop-shadow(0 0 15px rgba(255, 170, 0, 0.8));
+}
+
+.hero-subtitle {
+    margin-top: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    color: #b300ff; /* Purple */
+    font-size: 1.2rem;
+    letter-spacing: 4px;
+    text-shadow: 0 0 10px #b300ff;
+}
+
+.hero-tagline {
+    margin-top: 40px;
+    color: #aaa;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    letter-spacing: 1px;
+}
+
+.hero-quote {
+    color: #ffaa00; /* Yellow/Orange */
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    letter-spacing: 1px;
+    margin-top: 10px;
+    text-shadow: 0 0 8px rgba(255, 170, 0, 0.6);
+}
+
+
+
+/* Cursor Marker Logic (Still valid) */
+.amove-marker {
+  position: fixed; /* Fixed because clicks might happen relative to viewport */
+  /* ... rest same as before ... */
+}
+/* Re-include marker styles from before but simplified if needed, 
+   keeping the core animation classes 
+*/
+.amove-marker {
+  position: absolute; /* Actually absolute to document body is better for scroll pages usually, typically appended to body */
+  width: 50px;
+  height: 50px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+}
+
+.amove-marker::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #00ffff;
+  border-radius: 50%;
+  animation: ringPulse 0.5s ease-out forwards;
+}
+
+.amove-marker::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #00ffff;
+  animation: dotFade 0.4s ease-out forwards;
+}
+
+.arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 10px solid #00ffff;
+  top: 50%;
+  left: 50%;
+  transform-origin: center 150%;
+  opacity: 0;
+  filter: drop-shadow(0 0 5px #00ffff);
+  animation: converge 0.4s ease-out forwards;
+}
+
+.arrow:nth-child(1) { transform: translate(-50%, -50%) rotate(0deg) translateY(-25px); }
+.arrow:nth-child(2) { transform: translate(-50%, -50%) rotate(90deg) translateY(-25px); }
+.arrow:nth-child(3) { transform: translate(-50%, -50%) rotate(180deg) translateY(-25px); }
+.arrow:nth-child(4) { transform: translate(-50%, -50%) rotate(270deg) translateY(-25px); }
+
+@keyframes ringPulse { 0% { width: 10px; height: 10px; opacity: 1; border-width: 3px; } 100% { width: 50px; height: 50px; opacity: 0; border-width: 1px; } }
+@keyframes dotFade { 0% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } }
+@keyframes converge { 0% { opacity: 0; margin-top: -15px; } 30% { opacity: 1; } 100% { opacity: 0; margin-top: 5px; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0px) scale(0.3); } }
+
+/* --- UNIT TOOLTIP --- */
+.dev-tooltip {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 300px;
+    background: rgba(5, 20, 31, 0.9);
+    border: 1px solid #00ffff;
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    pointer-events: none; /* Ignore mouse, managed by JS position */
+    transform: translate(-5px, calc(-100% - 20px)); /* Offset from cursor */
+    opacity: 1;
+    transition: opacity 0.2s;
+}
+
+.dev-tooltip.hidden {
+    opacity: 0;
+}
+
+#tooltip-img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 4px;
+    border-bottom: 2px solid #3e78b6;
+}
+
+.tooltip-content h3 {
+    margin: 0;
+    color: #e0e0e0;
+    font-size: 1.4rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.tooltip-content p {
+    margin: 5px 0 0;
+    color: #3ba2ce;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    text-align: center;
+}
+
+/* --- DEVS SECTION --- */
+.section-devs {
+    min-height: 50vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4rem 2rem;
+}
+
+.section-devs h2 {
+    font-size: 6rem;
+    letter-spacing: 8px;
+    text-align: center;
+    text-shadow:
+        0 0 var(--devs-glow-1) rgba(0, 255, 255, 0.8),
+        0 0 var(--devs-glow-2) rgba(0, 255, 255, 0.5),
+        0 0 var(--devs-glow-3) rgba(0, 255, 255, 0.3);
+}
+
+.section-devs {
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* --- GOALS SECTION --- */
+.section-goals {
+    min-height: 50vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 4rem 2rem;
+    gap: 2rem;
+}
+
+.section-goals h2 {
+    font-size: 4rem;
+    letter-spacing: 6px;
+    text-align: center;
+     text-shadow:
+        0 0 var(--devs-glow-1) rgba(255, 170, 0, 0.8),
+        0 0 var(--devs-glow-2) rgba(255, 170, 0, 0.5),
+        0 0 var(--devs-glow-3) rgba(255, 170, 0, 0.3);
+}
+
+/* --- CONTENT PLACEHOLDER --- */
+.content-placeholder {
+    width: 60%;
+    min-width: 300px;
+    height: 300px;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+}
+
+.content-placeholder:hover {
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.placeholder-text {
+    font-family: 'Share Tech Mono', monospace;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+}
+
+.section-devs .content-placeholder {
+    width: 90%;
+    max-width: 1400px;
+    height: 70vh;
+    min-height: 600px;
+}
+
+/* --- CONTACT SECTION --- */
+.section-contact {
+    min-height: 30vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem 2rem 4rem 2rem;
+    gap: 2rem;
+}
+
+.section-contact h2 {
+    font-size: 3rem;
+    letter-spacing: 4px;
+    margin-bottom: 1rem;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.contact-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3rem;
+}
+
+.contact-link {
+    color: #3ba2ce;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.5rem;
+    text-decoration: none;
+    letter-spacing: 2px;
+    border: 1px solid transparent;
+    padding: 0.5rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.contact-link:hover {
+    color: #fff;
+    border-color: #00ffff;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+    background: rgba(0, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+/* --- ETHOS GRID --- */
+.ethos-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    width: 90%;
+    max-width: 1200px;
+    margin-top: 2rem;
+}
+
+.ethos-card {
+    background: rgba(5, 5, 16, 0.6);
+    border: 1px solid rgba(0, 255, 255, 0.1);
+    border-radius: 8px; /* Slightly rounded */
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(4px);
+    
+    /* Tech corners using simple border-image or box-shadow trickery? 
+       Let's use a subtle clip-path or just borders for cleaner code 
+    */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+/* Corner Accents */
+.ethos-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 20px;
+    height: 20px;
+    border-top: 2px solid #ffaa00;
+    border-left: 2px solid #ffaa00;
+    opacity: 0.5;
+    transition: all 0.3s ease;
+}
+
+.ethos-card::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 20px;
+    height: 20px;
+    border-bottom: 2px solid #00ffff;
+    border-right: 2px solid #00ffff;
+    opacity: 0.5;
+    transition: all 0.3s ease;
+}
+
+.ethos-card:hover {
+    transform: translateY(-5px);
+    background: rgba(5, 5, 16, 0.8);
+    border-color: rgba(0, 255, 255, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 255, 255, 0.1);
+}
+
+.ethos-card:hover::before {
+    width: 100%;
+    height: 100%;
+    opacity: 1;
+    border-color: #ffaa00;
+}
+
+.ethos-card:hover::after {
+    width: 100%;
+    height: 100%;
+    opacity: 1;
+    border-color: #00ffff;
+}
+
+.ethos-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.ethos-icon {
+    font-size: 2rem;
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+}
+
+.ethos-title {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #fff;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+}
+
+.ethos-desc {
+    margin: 0;
+    font-family: 'Share Tech Mono', monospace;
+    color: #a0a0b0;
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+/* Card Specific Theme Colors for variety */
+.ethos-card[data-index="01"] .ethos-title { color: #ffaa00; text-shadow: 0 0 8px rgba(255, 170, 0, 0.6); } /* Efficiency - Orange */
+.ethos-card[data-index="02"] .ethos-title { color: #00ffff; text-shadow: 0 0 8px rgba(0, 255, 255, 0.6); } /* Expertise - Cyan */
+.ethos-card[data-index="03"] .ethos-title { color: #ff0055; text-shadow: 0 0 8px rgba(255, 0, 85, 0.6); }   /* Focused - Red/Pink */
+.ethos-card[data-index="04"] .ethos-title { color: #00ff66; text-shadow: 0 0 8px rgba(0, 255, 102, 0.6); } /* Integrity - Green */
+
+/* Hover Description Text Highlight */
+.ethos-card:hover .ethos-desc {
+    color: #fff;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .ethos-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --- DEVS MAP CONTAINER --- */
+.devs-map-container {
+    width: 90%;
+    max-width: 1400px;
+    height: 600px; /* Fixed height for the map window */
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    border-radius: 12px;
+    position: relative; /* For absolute children */
+    overflow: hidden; /* Contain the canvas */
+    box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px);
+    margin: 0 auto; /* Center it */
+}
+
+.devs-map-container canvas {
+    display: block;
+    outline: none;
+}
+
+/* --- DEV UNIT CARD --- */
+.dev-card {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 320px;
+    background: rgba(5, 10, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    
+    /* Animation State */
+    opacity: 0;
+    transform: translateX(50px);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+}
+
+.dev-card.visible {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.dev-card-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 15px;
+}
+
+.dev-img-container {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #000;
+}
+
+.dev-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dev-header-text h3 {
+    margin: 0;
+    font-size: 1.4rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dev-role {
+    font-size: 0.9rem;
+    color: #888;
+    font-family: 'Share Tech Mono', monospace;
+}
+
+.dev-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stat-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stat-bar-bg {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.stat-bar-fill {
+    height: 100%;
+    background: #fff;
+    border-radius: 3px;
+    width: 0%;
+    transition: width 1s ease-out;
+}
+
+/* --- SELECTION BOX --- */
+.selection-box {
+    position: absolute;
+    border: 1px solid #00ffff;
+    background: rgba(0, 255, 255, 0.1);
+    pointer-events: none; /* Let clicks pass through */
+    z-index: 100;
+    display: none;
+}
