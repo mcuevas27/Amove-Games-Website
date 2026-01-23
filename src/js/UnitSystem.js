@@ -10,11 +10,11 @@ const UNITS = [
     {
         id: 'skacal',
         name: 'Michael Skacal',
-        role: 'Art Director & Sequencer',
+        role: 'Tech Director',
         stats: [
-            { label: 'Rigging', value: 95 },
-            { label: 'Unreal Engine', value: 90 },
-            { label: 'Caffeine', value: 110 }
+            { label: 'Roll Forward Tech', value: 95 },
+            { label: 'Unity Engine', value: 90 },
+            { label: 'AYCE Sushi', value: 80 }
         ],
         color: '#e11d48', // Red
         img: 'assets/skacal.png'
@@ -22,11 +22,11 @@ const UNITS = [
     {
         id: 'ramon',
         name: 'Ramon Zarate', // Assuming Ramon is the Lead/Gameplay eng based on context or just mapping him here
-        role: 'Lead Gameplay Engineer',
+        role: 'Principal Engineer',
         stats: [
-            { label: 'C++', value: 99 },
-            { label: 'Bug Squashing', value: 100 },
-            { label: 'Sleep', value: 15 }
+            { label: 'Canadian', value: 85 },
+            { label: 'Gameplay', value: 100 },
+            { label: 'Office Space', value: 15 }
         ],
         color: '#22c55e', // Green
         img: 'assets/ramon.png'
@@ -34,35 +34,35 @@ const UNITS = [
     {
         id: 'david',
         name: 'David',
-        role: 'Narrative Designer',
+        role: 'Game Director',
         stats: [
-            { label: 'World Building', value: 92 },
-            { label: 'Dialogue', value: 88 },
-            { label: 'Empathy', value: 95 }
+            { label: 'Spreadsheet', value: 92 },
+            { label: 'Balance', value: 99 },
+            { label: 'Driving', value: 60 }
         ],
         color: '#3b82f6', // Blue
         img: 'assets/david.png'
     },
     {
         id: 'unknown_1',
-        name: 'REDACTED',
-        role: 'Sound & Audio',
+        name: 'Unknown 1',
+        role: 'Princple 3D Artist',
         stats: [
-            { label: 'Decibels', value: 100 },
-            { label: 'Synth Design', value: 90 },
-            { label: 'Secrecy', value: 100 }
+            { label: 'Environments', value: 100 },
+            { label: 'Story Development', value: 90 },
+            { label: 'CUDA Cores', value: 5 }
         ],
         color: '#a855f7', // Purple
         img: 'assets/portrait_placeholder.png'
     },
     {
         id: 'unknown_2',
-        name: 'REDACTED',
-        role: 'Level Designer',
+        name: 'Unknown 2',
+        role: 'Art Director',
         stats: [
-            { label: 'Layout', value: 88 },
-            { label: 'Lighting', value: 80 },
-            { label: 'Access', value: 0 }
+            { label: 'Animation', value: 95 },
+            { label: 'VFX', value: 70 },
+            { label: 'Sleep', value: 20 }
         ],
         color: '#f59e0b', // Amber
         img: 'assets/portrait_placeholder.png'
