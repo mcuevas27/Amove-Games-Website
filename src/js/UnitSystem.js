@@ -36,9 +36,9 @@ const UNITS = [
         name: 'David',
         role: 'Game Director',
         stats: [
-            { label: 'Spreadsheet', value: 92 },
+            { label: 'Design', value: 92 },
             { label: 'Balance', value: 99 },
-            { label: 'Driving', value: 60 }
+            { label: 'Politics', value: 2 }
         ],
         color: '#3b82f6', // Blue
         img: 'assets/david.png'
