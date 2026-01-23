@@ -1,6 +1,7 @@
 import { tileList, tilesMap, getGridMesh } from './HexGrid.js';
 import { registerFogUnits } from './FogSystem.js';
 import { showDevCard, hideDevCard } from './DevCardUI.js';
+import { findPath, findClosestLand } from './Pathfinder.js';
 
 import * as THREE from 'three';
 
@@ -88,22 +89,18 @@ const hoverState = {
 
 export function initUnits(scene, camera, container) {
     cameraRef = camera;
-    domRef = container; // Use container for rect calculations to include overlay
+    domRef = container; 
     scene.add(unitGroup);
 
     // Create Selection Box
     selectionBox = document.createElement('div');
     selectionBox.className = 'selection-box';
-    container.appendChild(selectionBox); // Append to container, sibling to canvas
+    container.appendChild(selectionBox); 
 
     spawnUnits();
 
-    // Register units for dynamic fog
     registerFogUnits(unitGroup.children);
 
-    // Interaction Listeners - Attach to container to handle events over UI too if needed, 
-    // but canvas is safe. However, domRef is now container.
-    // Use the container to catch events!
     container.addEventListener('mousemove', onMouseMove);
     container.addEventListener('mousedown', onMouseDown);
     container.addEventListener('mouseup', onMouseUp);
@@ -111,29 +108,26 @@ export function initUnits(scene, camera, container) {
 }
 
 function spawnUnits() {
-    // 1. Find a valid start tile (Not Water)
     const landTiles = tileList.filter(t => t.type !== 'WATER');
     if (landTiles.length === 0) return;
 
-    // Pick start closest to center (0,0,0) instead of random
     landTiles.sort((a, b) => {
         const da = a.x * a.x + a.z * a.z;
         const db = b.x * b.x + b.z * b.z;
         return da - db;
     });
     
-    // Take the closest one (center)
     const startTile = landTiles[0];
     
-    // 2. Find neighbors for clustering
+    // Clustering
     const neighbors = landTiles.sort((a, b) => {
         const da = (a.x - startTile.x)**2 + (a.z - startTile.z)**2;
         const db = (b.x - startTile.x)**2 + (b.z - startTile.z)**2;
         return da - db;
-    }).slice(0, 5); // Take top 5 closest including self
+    }).slice(0, 5); 
 
-    // 3. Spawn Meshes
-    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); // Placeholder Cube
+    // Spawn Meshes
+    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); 
 
     neighbors.forEach((tile, index) => {
         if(index >= UNITS.length) return;
@@ -148,7 +142,7 @@ function spawnUnits() {
         });
         
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(tile.x, 0.5, tile.z); // Slightly above ground
+        mesh.position.set(tile.x, 0.5, tile.z); 
         
         // Metadata
         mesh.userData = {
@@ -156,27 +150,35 @@ function spawnUnits() {
             id: data.id,
             hexId: tile.id,
             data: data,
-            baseY: 0.5
+            baseY: 0.5,
+            // Path State
+            currentPath: [], // Array of tiles
+            targetPos: null,
+            isMoving: false
         };
 
         unitGroup.add(mesh);
     });
 }
 
+// --- DRAG SELECTION --- //
 function onMouseDown(event) {
-    if (event.button !== 0) return; // Only Left Click
+    if (event.button !== 0) return; 
 
     const rect = domRef.getBoundingClientRect();
     isDragging = true;
     startPos.x = event.clientX - rect.left;
     startPos.y = event.clientY - rect.top;
 
-    // Reset Selection Box style
     selectionBox.style.width = '0px';
     selectionBox.style.height = '0px';
     selectionBox.style.left = startPos.x + 'px';
     selectionBox.style.top = startPos.y + 'px';
     selectionBox.style.display = 'block';
+    
+    selectionBox.style.zIndex = '99999';
+    selectionBox.style.backgroundColor = 'rgba(0, 255, 255, 0.2)';
+    selectionBox.style.border = '1px solid #00ffff';
 }
 
 function onMouseMove(event) {
@@ -206,14 +208,11 @@ function onMouseUp(event) {
     const endX = event.clientX - rect.left;
     const endY = event.clientY - rect.top;
 
-    // Check if it was a Click (minimal drag)
     const dist = Math.sqrt((endX - startPos.x)**2 + (endY - startPos.y)**2);
     
     if (dist < 5) {
-        // Pure Click Logic
         handleSingleClick(event, rect);
     } else {
-        // Box Select Logic
         handleBoxSelect(startPos.x, startPos.y, endX, endY, rect.width, rect.height);
     }
 }
@@ -233,14 +232,13 @@ function handleSingleClick(event, rect) {
     }
 }
 
-// Convert 3D world pos to Screen XY
 function toScreenPosition(obj, camera, width, height) {
     const vector = new THREE.Vector3();
     obj.getWorldPosition(vector);
-    vector.project(camera); // now ranges -1 to 1
+    vector.project(camera); 
 
     const x = (vector.x * 0.5 + 0.5) * width;
-    const y = (-(vector.y) * 0.5 + 0.5) * height; // Top is 0 in CSS
+    const y = (-(vector.y) * 0.5 + 0.5) * height; 
 
     return { x, y };
 }
@@ -279,7 +277,6 @@ function onRightClick(event) {
 
     raycaster.setFromCamera(mouse, cameraRef);
 
-    // Raycast against the Terrain
     const gridMesh = getGridMesh();
     if (!gridMesh) return;
 
@@ -290,26 +287,35 @@ function onRightClick(event) {
         const instanceId = hit.instanceId;
         
         if (instanceId !== undefined && tileList[instanceId]) {
-            const targetTile = tileList[instanceId];
+            let targetTile = tileList[instanceId];
             
+            // Handle Water Clicks
             if (targetTile.type === 'WATER') {
-                return;
+                console.log("Clicked Water, finding closest land...");
+                const nearest = findClosestLand(targetTile);
+                if (nearest) {
+                    targetTile = nearest;
+                    console.log("Found nearest land:", targetTile.id);
+                } else {
+                    console.error("No valid land found near water.");
+                    return; // No valid land found
+                }
             }
 
+            console.log("Moving Group to:", targetTile.id);
             moveGroup(hoverState.selectedUnits, targetTile, instanceId);
         }
     }
 }
 
 function moveGroup(units, targetTile, targetIndex) {
+    console.log(`Moving ${units.length} units to ${targetTile.id}`);
     if (units.length === 1) {
-        moveUnit(units[0], targetTile);
+        setPathForUnit(units[0], targetTile);
         return;
     }
 
-    const slots = [targetTile];
-    
-    // Search spiral/neighbors for free slots
+    // Formation Logic: Scatter around target
     const nearest = tileList
         .filter(t => t.type !== 'WATER')
         .sort((a,b) => {
@@ -321,23 +327,63 @@ function moveGroup(units, targetTile, targetIndex) {
 
     units.forEach((unit, i) => {
         if (nearest[i]) {
-            moveUnit(unit, nearest[i]);
+            setPathForUnit(unit, nearest[i]);
         } else {
-            // Fallback (stack)
-            moveUnit(unit, targetTile); 
+            setPathForUnit(unit, targetTile); 
         }
     });
 }
 
-function moveUnit(unit, targetTile) {
-    // Current Position
-    const startPos = unit.position.clone();
-    const endPos = new THREE.Vector3(targetTile.x, unit.userData.baseY, targetTile.z);
-
-    unit.userData.targetPos = endPos;
-    unit.userData.isMoving = true;
+function getCurrentTile(unit) {
+    // Find unit's current nearest tile
+    // ...
+    let closest = null;
+    let minD = Infinity;
     
-    // No explicit reveal call needed
+    tileList.forEach(t => {
+        const d = (t.x - unit.position.x)**2 + (t.z - unit.position.z)**2;
+        if (d < minD) {
+            minD = d;
+            closest = t;
+        }
+    });
+    // console.log("Unit at:", closest ? closest.id : "NONE");
+    return closest;
+}
+
+function setPathForUnit(unit, endTile) {
+    const startTile = getCurrentTile(unit);
+    if (!startTile) {
+        console.error("Could not determine unit start tile.");
+        return;
+    }
+
+    console.log(`Pathing Unit ${unit.userData.id} from ${startTile.id} to ${endTile.id}`);
+    const path = findPath(startTile, endTile);
+    console.log("Path found:", path.length);
+    
+    if (path.length > 0) {
+        unit.userData.currentPath = path;
+        unit.userData.isMoving = true;
+        
+        // Start moving to first node
+        setNextPathNode(unit);
+    } else {
+        console.warn("No path found or already at destination.");
+    }
+}
+
+function setNextPathNode(unit) {
+    if (unit.userData.currentPath.length === 0) {
+        unit.userData.isMoving = false;
+        unit.userData.targetPos = null;
+        return;
+    }
+
+    const nextTile = unit.userData.currentPath.shift();
+    const endPos = new THREE.Vector3(nextTile.x, unit.userData.baseY, nextTile.z);
+    
+    unit.userData.targetPos = endPos;
 }
 
 function selectUnits(units) {
@@ -356,13 +402,11 @@ function selectUnits(units) {
         units.forEach(u => {
             u.scale.set(1.2, 1.2, 1.2);
             if(u.material.emissive) {
-                // Use unit's own color
                 u.material.emissive.set(u.userData.data.color); 
                 u.material.emissiveIntensity = 0.8; 
             }
         });
 
-        // Show UI for the FIRST unit in selection
          showDevCard(units[0].userData.data);
     } else {
         hideDevCard();
@@ -370,24 +414,26 @@ function selectUnits(units) {
 }
 
 export function updateUnits(time) {
-    // Idle Animation & Movement
+    const speed = 5.0 * 0.016; 
+
     unitGroup.children.forEach((mesh, i) => {
         if (!mesh.userData.baseY) return;
 
-        // Movement Logic
+        // Path Movement Logic
         if (mesh.userData.isMoving && mesh.userData.targetPos) {
-            const speed = 5.0 * 0.016; // unit/frame approx
             const dist = mesh.position.distanceTo(mesh.userData.targetPos);
             
             if (dist < 0.1) {
+                // Reached Node
                 mesh.position.copy(mesh.userData.targetPos);
-                mesh.userData.isMoving = false;
-                mesh.userData.targetPos = null;
+                // Get next node
+                setNextPathNode(mesh);
             } else {
                 const dir = new THREE.Vector3().subVectors(mesh.userData.targetPos, mesh.position).normalize();
                 mesh.position.add(dir.multiplyScalar(speed));
             }
-        } else {
+        } 
+        else {
             // Idle bobbing only when stationary
             mesh.position.y = mesh.userData.baseY + Math.sin(time * 2 + i) * 0.1;
         }
