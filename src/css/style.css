@@ -595,9 +595,15 @@ body::after {
 /* --- DEV UNIT CARD --- */
 .dev-card {
     position: absolute;
-    top: 20px;
+    bottom: 20px;
+    left: 20px;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), left 0s, right 0s; /* Instant swap for pos */
+}
+
+.dev-card.alt-pos {
+    left: auto;
     right: 20px;
-    width: 320px;
+    width: 340px;
     background: rgba(5, 10, 20, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
@@ -630,9 +636,9 @@ body::after {
 }
 
 .dev-img-container {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
+    width: 200px;
+    height: 200px;
+    border-radius: 8px;
     border: 3px solid #fff;
     overflow: hidden;
     flex-shrink: 0;

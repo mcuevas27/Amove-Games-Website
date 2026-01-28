@@ -1,9 +1,10 @@
 import { tileList, tilesMap, getGridMesh } from './HexGrid.js';
 import { registerFogUnits } from './FogSystem.js';
-import { showDevCard, hideDevCard } from './DevCardUI.js';
+import { showDevCard, hideDevCard, initDevCardGUI } from './DevCardUI.js';
 import { findPath, findClosestLand } from './Pathfinder.js';
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Unit Data
 const UNITS = [
@@ -17,7 +18,7 @@ const UNITS = [
             { label: 'AYCE Sushi', value: 80 }
         ],
         color: '#e11d48', // Red
-        img: 'assets/skacal.png'
+        img: 'assets/3D/Skacal.glb'
     },
     {
         id: 'ramon',
@@ -29,7 +30,7 @@ const UNITS = [
             { label: 'Office Space', value: 15 }
         ],
         color: '#22c55e', // Green
-        img: 'assets/ramon.png'
+        img: 'assets/3D/Ramon.glb'
     },
     {
         id: 'david',
@@ -41,7 +42,7 @@ const UNITS = [
             { label: 'Politics', value: 2 }
         ],
         color: '#3b82f6', // Blue
-        img: 'assets/david.png'
+        img: 'assets/3D/David.glb'
     },
     {
         id: 'unknown_1',
@@ -53,7 +54,7 @@ const UNITS = [
             { label: 'CUDA Cores', value: 5 }
         ],
         color: '#a855f7', // Purple
-        img: 'assets/portrait_placeholder.png'
+        img: '?'
     },
     {
         id: 'unknown_2',
@@ -65,7 +66,7 @@ const UNITS = [
             { label: 'Sleep', value: 20 }
         ],
         color: '#f59e0b', // Amber
-        img: 'assets/portrait_placeholder.png'
+        img: '?'
     }
 ];
 
@@ -74,6 +75,8 @@ let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 let cameraRef = null;
 let domRef = null;
+let skacalMesh = null; // Ref for GUI
+
 
 // Drag State
 let selectionBox = null;
@@ -119,52 +122,85 @@ function spawnUnits() {
     
     const startTile = landTiles[0];
     
-    // Clustering
+    // Cluster Logic for Known Units
     const neighbors = landTiles.sort((a, b) => {
         const da = (a.x - startTile.x)**2 + (a.z - startTile.z)**2;
         const db = (b.x - startTile.x)**2 + (b.z - startTile.z)**2;
         return da - db;
-    }).slice(0, 5); 
+    }); // We need full list for random picking later
 
-    // Spawn Meshes
-    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); 
+    const knownUnits = UNITS.filter(u => u.img !== '?');
+    const unknownUnits = UNITS.filter(u => u.img === '?');
 
-    neighbors.forEach((tile, index) => {
-        if(index >= UNITS.length) return;
-
-        const data = UNITS[index];
-        const material = new THREE.MeshStandardMaterial({ 
-            color: data.color,
-            roughness: 0.3,
-            metalness: 0.5,
-            emissive: 0x000000,
-            emissiveIntensity: 0
-        });
-        
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(tile.x, 0.5, tile.z); 
-        
-        // Metadata
-        mesh.userData = {
-            isUnit: true,
-            id: data.id,
-            hexId: tile.id,
-            data: data,
-            baseY: 0.5,
-            // Path State
-            currentPath: [], // Array of tiles
-            targetPos: null,
-            isMoving: false
-        };
-
-        unitGroup.add(mesh);
+    // Spawn Known Units (Clusters)
+    knownUnits.forEach((data, i) => {
+        if (i < neighbors.length) {
+            createUnitMesh(data, neighbors[i], false);
+        }
     });
+
+    // Spawn Unknown Units (Random Far)
+    const farTiles = neighbors.filter(t => {
+        const dist = Math.sqrt((t.x - startTile.x)**2 + (t.z - startTile.z)**2);
+        return dist > 15; // Minimum distance
+    });
+
+    unknownUnits.forEach(data => {
+        if (farTiles.length > 0) {
+            const randIndex = Math.floor(Math.random() * farTiles.length);
+            const tile = farTiles.splice(randIndex, 1)[0]; // Pick and remove to avoid overlap
+            createUnitMesh(data, tile, true);
+        } else {
+            console.warn("Not enough far tiles for hidden unit:", data.name);
+        }
+    });
+}
+
+function createUnitMesh(data, tile, isLocked) {
+    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); 
+    const material = new THREE.MeshStandardMaterial({ 
+        color: data.color,
+        roughness: 0.3,
+        metalness: 0.5,
+        emissive: 0x000000,
+        emissiveIntensity: 0
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(tile.x, 0.5, tile.z); 
+    mesh.visible = !isLocked; // Hide if locked 
+
+    // Generic 3D Model Loading
+    if (data.img.endsWith('.glb')) {
+        loadCustomModel(mesh, data.img, data.id);
+    }
+    
+    // Metadata
+    mesh.userData = {
+        isUnit: true,
+        id: data.id,
+        hexId: tile.id,
+        data: data,
+        baseY: 0.5,
+        // Path State
+        currentPath: [], 
+        targetPos: null,
+        isMoving: false,
+        // Discovery State
+        locked: isLocked, // True for unknown units
+        discovered: !isLocked
+    };
+
+    unitGroup.add(mesh);
 }
 
 // --- DRAG SELECTION --- //
 function onMouseDown(event) {
     if (event.button !== 0) return; 
 
+    // Prevent interaction if hovering over locked unit? 
+    // Handled in click logic mostly.
+    
     const rect = domRef.getBoundingClientRect();
     isDragging = true;
     startPos.x = event.clientX - rect.left;
@@ -222,11 +258,26 @@ function handleSingleClick(event, rect) {
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     raycaster.setFromCamera(mouse, cameraRef);
-    const intersects = raycaster.intersectObjects(unitGroup.children);
+    const intersects = raycaster.intersectObjects(unitGroup.children, true);
 
     if (intersects.length > 0) {
-        const hit = intersects[0].object;
-        selectUnits([hit]);
+        let hitObj = intersects[0].object;
+        
+        while(hitObj) {
+            if (hitObj.userData && hitObj.userData.isUnit) {
+                // LOCK CHECK
+                if (hitObj.userData.locked) {
+                    console.log("Unit is locked/undiscovered.");
+                    return;
+                }
+
+                selectUnits([hitObj]);
+                return;
+            }
+            hitObj = hitObj.parent;
+            if (hitObj === unitGroup || hitObj === null) break; 
+        }
+        selectUnits([]);
     } else {
         selectUnits([]);
     }
@@ -252,6 +303,8 @@ function handleBoxSelect(x1, y1, x2, y2, width, height) {
     const gathered = [];
 
     unitGroup.children.forEach(unit => {
+        if (unit.userData.locked) return; // Skip locked units
+
         const screenPos = toScreenPosition(unit, cameraRef, width, height);
         
         if (screenPos.x >= minX && screenPos.x <= maxX && 
@@ -402,16 +455,19 @@ function selectUnits(units) {
         units.forEach(u => {
             u.scale.set(1.2, 1.2, 1.2);
             if(u.material.emissive) {
-                u.material.emissive.set(u.userData.data.color); 
                 u.material.emissiveIntensity = 0.8; 
             }
         });
 
-         showDevCard(units[0].userData.data);
-    } else {
+         const rect = domRef.getBoundingClientRect();
+         const screenPos = toScreenPosition(units[0], cameraRef, rect.width, rect.height);
+         showDevCard(units[0].userData.data, screenPos, rect.width, rect.height);
         hideDevCard();
     }
 }
+
+// Global Settings
+let rotationSpeed = 0.1;
 
 export function updateUnits(time) {
     const speed = 5.0 * 0.016; 
@@ -431,6 +487,14 @@ export function updateUnits(time) {
             } else {
                 const dir = new THREE.Vector3().subVectors(mesh.userData.targetPos, mesh.position).normalize();
                 mesh.position.add(dir.multiplyScalar(speed));
+                
+                // Smooth Rotation (Slerp)
+                const targetPos = new THREE.Vector3(mesh.userData.targetPos.x, mesh.position.y, mesh.userData.targetPos.z);
+                const dummy = new THREE.Object3D();
+                dummy.position.copy(mesh.position);
+                dummy.lookAt(targetPos);
+                
+                mesh.quaternion.slerp(dummy.quaternion, rotationSpeed);
             }
         } 
         else {
@@ -438,11 +502,98 @@ export function updateUnits(time) {
             mesh.position.y = mesh.userData.baseY + Math.sin(time * 2 + i) * 0.1;
         }
 
-        // Spin if selected
-        if (hoverState.selectedUnits.includes(mesh)) {
-            mesh.rotation.y += 0.02;
-        } else {
-             mesh.rotation.y *= 0.9;
+        // Spin if selected - REMOVED per user request
+        // if (hoverState.selectedUnits.includes(mesh)) {
+        //     mesh.rotation.y += 0.02;
+        // } else {
+        //      mesh.rotation.y *= 0.9;
+        // }
+
+        // Discovery Logic
+        if (!mesh.userData.locked) {
+            // This is an active unit, check if it's close to any locked units
+            unitGroup.children.forEach(other => {
+                if (other.userData && other.userData.locked) {
+                    const d = mesh.position.distanceTo(other.position);
+                    if (d < 1.5) {
+                        // UNLOCK!
+                        other.userData.locked = false;
+                        other.userData.discovered = true;
+                        
+                        // Reveal Visuals
+                        other.visible = true;
+
+                        console.log(`Discovered: ${other.userData.data.name}`);
+                        other.position.y += 1.0; // Jump up
+                    }
+                }
+            });
         }
+    });
+}
+
+function loadCustomModel(parentMesh, modelPath, unitId) {
+    const loader = new GLTFLoader();
+    loader.load(modelPath, (gltf) => {
+        const model = gltf.scene;
+        
+        // Default Scale/Pos Adjustments (Global for now)
+        // Ideally these would be in the UNIT data config per model
+        model.scale.set(1.4, 1.4, 1.4); 
+        model.position.y = 0.58; 
+        
+        parentMesh.geometry.dispose();
+        // parentMesh.material.dispose(); 
+        
+        parentMesh.add(model);
+        
+        // Make the box invisible but keep it for raycasting/selection
+        parentMesh.material = new THREE.MeshBasicMaterial({ visible: false, opacity: 0, transparent: true });
+
+        // Store reference for GUI controls explicitly if needed
+        // For now, we only have one global GUI set that controls "skacalMesh"
+        // If we want the GUI to control "currently selected unit", we'd need to update logic.
+        // For now, let's just assign skacalMesh if it IS Skacal so the existing GUI works.
+        if (unitId === 'skacal') {
+            skacalMesh = model; 
+        }
+
+        console.log(`Custom Model Loaded: ${modelPath}`);
+
+        model.traverse(c => {
+            if(c.isMesh) {
+                c.castShadow = true;
+                c.receiveShadow = true;
+            }
+        });
+
+    }, undefined, (error) => {
+        console.error(`Error loading model ${modelPath}:`, error);
+    });
+}
+
+export function initUnitGUI(gui) {
+    const folder = gui.addFolder('Unit Settings');
+    
+    const params = {
+        skacalScale: 1.4,
+        skacalElevation: 0.58,
+        rotSpeed: 0.1
+    };
+
+    folder.add(params, 'skacalScale', 0.1, 2.0).name('Skacal Scale').onChange((v) => {
+        if (skacalMesh) {
+            skacalMesh.scale.set(v, v, v);
+        }
+    });
+
+    folder.add(params, 'skacalElevation', -2.0, 2.0).name('Skacal Y Offset').onChange((v) => {
+        if (skacalMesh) {
+            skacalMesh.position.y = v;
+        }
+    });
+
+    folder.add(params, 'rotSpeed', 0.01, 1.0).name('Rotation Rate').onChange((v) => {
+        rotationSpeed = v;
     });
 }

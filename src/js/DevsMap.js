@@ -6,7 +6,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 import { initHexGrid, updateGrid } from './HexGrid.js';
-import { initUnits, updateUnits } from './UnitSystem.js';
+import { initUnits, updateUnits, initUnitGUI } from './UnitSystem.js';
+import { initDevCardGUI } from './DevCardUI.js';
 import { initFog, updateFog } from './FogSystem.js';
 
 let scene, camera, renderer, composer, controls;
@@ -128,6 +129,8 @@ export function initDevsMap(containerId) {
 
 function initGUI() {
     const gui = new GUI({ title: 'Devs Map Config' });
+    initUnitGUI(gui);
+    initDevCardGUI(gui);
     
     const camFolder = gui.addFolder('Camera');
     camFolder.add(camera, 'zoom', 1, 100).name('Zoom').onChange(() => camera.updateProjectionMatrix());

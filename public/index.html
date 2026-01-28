@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>A-Move Games | Protocol</title>
-    <link rel="stylesheet" href="../src/css/style.css">
+    <link rel="stylesheet" href="../src/css/style.css?v=3">
     <script type="importmap">
         {
             "imports": {
@@ -21,8 +21,8 @@
     <nav class="main-nav">
         <ul>
             <li><a href="#hero">HOME</a></li>
-            <li><a href="#goals">GOALS</a></li>
             <li><a href="#devs">DEVS</a></li>
+            <li><a href="#goals">GOALS</a></li>
             <li><a href="#contact">CONTACT</a></li>
         </ul>
     </nav>
@@ -35,6 +35,20 @@
             </div>
             <div class="hero-subtitle">EST. 2026 // North America</div>
             <div class="hero-quote">Fast Action Real-Time Strategy</div>
+        </section>
+
+        <section id="devs" class="section-devs">
+            <h2 class="text-scanline title-cyan">DEVS</h2>
+            <!-- New Embedded Container -->
+            <div id="devs-map-container" class="devs-map-container"></div>
+            
+            <script type="module">
+                import { initDevsMap } from '../src/js/DevsMap.js';
+                // Trigger init when DOM is ready
+                window.addEventListener('load', () => {
+                    initDevsMap('devs-map-container');
+                });
+            </script>
         </section>
 
         <section id="goals" class="section-goals">
@@ -76,20 +90,6 @@
                     <p class="ethos-desc">Team emphasis on collective achievement over individual goals.</p>
                 </div>
             </div>
-        </section>
-
-        <section id="devs" class="section-devs">
-            <h2 class="text-scanline title-cyan">DEVS</h2>
-            <!-- New Embedded Container -->
-            <div id="devs-map-container" class="devs-map-container"></div>
-            
-            <script type="module">
-                import { initDevsMap } from '../src/js/DevsMap.js';
-                // Trigger init when DOM is ready
-                window.addEventListener('load', () => {
-                    initDevsMap('devs-map-container');
-                });
-            </script>
         </section>
 
         <section id="contact" class="section-contact">
