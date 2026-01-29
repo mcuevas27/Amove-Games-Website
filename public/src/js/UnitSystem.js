@@ -219,6 +219,7 @@ function createUnitMesh(data, tile, isLocked) {
     ring.position.y = -0.22; // Lift up: Unit=0.5, Ground=0.25. Target=0.28 => -0.22 relative
     ring.visible = false;
     ring.name = 'selectionRing';
+    ring.frustumCulled = false; // Prevent culling when animating far from parent origin
     
     mesh.add(ring);
 
