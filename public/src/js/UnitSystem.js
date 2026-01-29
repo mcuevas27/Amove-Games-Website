@@ -205,6 +205,22 @@ function createUnitMesh(data, tile, isLocked) {
         discovered: !isLocked
     };
 
+    // Selection Ring
+    const ringGeo = new THREE.RingGeometry(0.5, 0.6, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ 
+        color: 0x00ffff, 
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.8
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = -0.45; // Just above ground relative to unit center (which is at 0.5)
+    ring.visible = false;
+    ring.name = 'selectionRing';
+    
+    mesh.add(ring);
+
     unitGroup.add(mesh);
 }
 
@@ -622,6 +638,10 @@ function selectUnits(units) {
             u.material.emissive.setHex(0x000000);
             u.material.emissiveIntensity = 0;
         }
+        
+        // Hide Ring
+        const ring = u.getObjectByName('selectionRing');
+        if (ring) ring.visible = false;
     });
 
     hoverState.selectedUnits = units;
@@ -632,6 +652,10 @@ function selectUnits(units) {
             if(u.material.emissive) {
                 u.material.emissiveIntensity = 0.8;
             }
+            
+            // Show Ring
+            const ring = u.getObjectByName('selectionRing');
+            if (ring) ring.visible = true;
         });
 
         const rect = domRef.getBoundingClientRect();
@@ -678,7 +702,16 @@ export function updateUnits(time) {
         } 
         else {
             // Idle bobbing only when stationary
+            // Idle bobbing only when stationary
             mesh.position.y = mesh.userData.baseY + Math.sin(time * 2 + i) * 0.1;
+        }
+
+        // Animate Selection Ring
+        const ring = mesh.getObjectByName('selectionRing');
+        if (ring && ring.visible) {
+             ring.rotation.z -= 0.02; // Spin locally
+             const pulse = 0.8 + Math.sin(time * 5) * 0.2;
+             ring.material.opacity = pulse;
         }
 
 
