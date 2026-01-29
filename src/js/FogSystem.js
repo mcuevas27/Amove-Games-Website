@@ -48,6 +48,9 @@ export function updateFog(time) {
     const visibleThisFrame = new Set();
 
     unitsRef.forEach(unit => {
+        // Skip locked/hidden units - they shouldn't reveal fog
+        if (unit.userData && unit.userData.locked) return;
+
         tileList.forEach(tile => {
             const dx = tile.x - unit.position.x;
             const dz = tile.z - unit.position.z;

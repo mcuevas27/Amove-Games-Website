@@ -3,11 +3,28 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // DevCardUI.js
 
+const loader = new GLTFLoader();
+
 let cardContainer = null;
 let currentTimeout = null;
 // 3D Scene State
 let miniScene, miniCamera, miniRenderer, miniReqId;
 let currentLoadId = 0;
+
+// Multi-unit selection state
+let selectedUnitsData = [];
+let currentViewIndex = 0;
+
+// Interactive rotation state
+let isDraggingPortrait = false;
+let dragStartX = 0;
+let currentRotY = 0;
+let targetRotY = 0;
+
+// Event handler references for cleanup
+let portraitMouseMoveHandler = null;
+let portraitPointerUpHandler = null;
+let portraitLockChangeHandler = null;
 
 
 export function initCardUI(container) {
@@ -18,45 +35,89 @@ export function initCardUI(container) {
     container.appendChild(cardContainer);
 }
 
-export function showDevCard(data, focusPos, w, h) {
-    const container = document.getElementById('devs-map-container'); // Corrected ID
-    // Or simpler: Just find or create #dev-unit-card
+// New: Show card for multiple units with a selection bar
+export function showDevCard(dataArray, focusPos, w, h) {
+    // Support both single data object and array
+    const units = Array.isArray(dataArray) ? dataArray : [dataArray];
+    selectedUnitsData = units;
+    currentViewIndex = 0;
+
+    const container = document.getElementById('devs-map-container');
     let card = document.getElementById('dev-unit-card');
-    
+
     if (!card) {
         card = document.createElement('div');
         card.id = 'dev-unit-card';
         card.className = 'dev-card';
-        // Append to the section container so it is positioned relative to the canvas
         if (container) container.appendChild(card);
-        else document.body.appendChild(card); // Fallback
+        else document.body.appendChild(card);
     }
 
     // Reset Position
     card.classList.remove('alt-pos');
 
+    // Multi-unit mode class
+    if (units.length > 1) {
+        card.classList.add('multi-select');
+    } else {
+        card.classList.remove('multi-select');
+    }
+
     // Dynamic Positioning Logic
     if (focusPos && w && h) {
-        // Danger Zone: Bottom Left
-        // x < 380 (Card 320 + 20 margin + buffer)
-        // y > h - 400 (Card height approx)
         const isBottomLeft = focusPos.x < 380 && focusPos.y > (h - 400);
-        
         if (isBottomLeft) {
-            console.log("DevCard: Unit in Danger Zone, moving to Right.");
             card.classList.add('alt-pos');
         }
     }
 
-    // Populate
-    // Populate
-    const is3D = data.img.endsWith('.glb');
-    console.log("DevCard Data:", data.img, "Is 3D?", is3D);
-    
-    // Cleanup previous 3D if exists
+    // Build card content
+    renderCardContent(card, units, 0);
+
+    // Show
+    card.classList.add('visible');
+}
+
+function renderCardContent(card, units, viewIndex) {
+    const data = units[viewIndex];
+    const isMulti = units.length > 1;
+
     cleanup3D();
 
+    // Set current unit ID and load its config
+    currentUnitId = data.id;
+    if (unitConfigs[currentUnitId]) {
+        Object.assign(portraitSettings, unitConfigs[currentUnitId]);
+    } else {
+        Object.assign(portraitSettings, DEFAULT_SETTINGS);
+    }
+
+    // Update GUI sliders to reflect current unit's settings
+    refreshGUIControllers();
+
+    // Selection bar for multiple units
+    let selectionBar = '';
+    if (isMulti) {
+        selectionBar = `
+            <div class="dev-selection-bar">
+                <span class="selection-count">${units.length} SELECTED</span>
+                <div class="selection-portraits">
+                    ${units.map((u, i) => `
+                        <div class="selection-portrait ${i === viewIndex ? 'active' : ''}"
+                             data-index="${i}"
+                             style="border-color: ${u.color}; ${i === viewIndex ? `box-shadow: 0 0 10px ${u.color};` : ''}">
+                            ${getPortraitContent(u)}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Visual content (portrait/3D)
     let visualContent = '';
+    const is3D = data.img.endsWith('.glb');
+
     if (is3D) {
         visualContent = `<div class="dev-img-container dev-img-3d" id="dev-card-3d-mount" style="border-color: ${data.color}"></div>`;
     } else if (data.img === '?') {
@@ -72,6 +133,7 @@ export function showDevCard(data, focusPos, w, h) {
     }
 
     card.innerHTML = `
+        ${selectionBar}
         <div class="dev-card-header">
             ${visualContent}
             <div class="dev-header-text">
@@ -84,15 +146,27 @@ export function showDevCard(data, focusPos, w, h) {
                 <div class="stat-row">
                     <span class="stat-label">${s.label}</span>
                     <div class="stat-bar-bg">
-                        <div class="stat-bar-fill" style="width: 0%"></div> 
+                        <div class="stat-bar-fill" style="width: 0%"></div>
                     </div>
                 </div>
             `).join('')}
         </div>
     `;
 
-    // Show
-    card.classList.add('visible');
+    // Attach click handlers to portraits
+    if (isMulti) {
+        const portraits = card.querySelectorAll('.selection-portrait');
+        portraits.forEach(portrait => {
+            portrait.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(portrait.dataset.index);
+                if (idx !== currentViewIndex) {
+                    currentViewIndex = idx;
+                    renderCardContent(card, selectedUnitsData, idx);
+                }
+            });
+        });
+    }
 
     // Init 3D if needed
     if (is3D) {
@@ -102,8 +176,7 @@ export function showDevCard(data, focusPos, w, h) {
         }, 10);
     }
 
-
-    // Animate Bars (after slight delay for DOM paint)
+    // Animate Bars
     setTimeout(() => {
         const fills = card.querySelectorAll('.stat-bar-fill');
         fills.forEach((fill, i) => {
@@ -113,11 +186,30 @@ export function showDevCard(data, focusPos, w, h) {
     }, 50);
 }
 
+function getPortraitContent(data) {
+    if (data.img === '?') {
+        return `<span style="color: ${data.color}; font-size: 24px; font-weight: bold;">?</span>`;
+    } else if (data.img.endsWith('.glb')) {
+        // For 3D models, show colored initial
+        const initial = data.name.charAt(0).toUpperCase();
+        return `<span style="color: ${data.color}; font-size: 20px; font-weight: bold;">${initial}</span>`;
+    } else {
+        return `<img src="${data.img}" alt="${data.name}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+    }
+}
+
 export function hideDevCard() {
     cleanup3D();
+
+    // Clear state
+    currentUnitId = null;
+    selectedUnitsData = [];
+    currentViewIndex = 0;
+
     const card = document.getElementById('dev-unit-card');
     if (card) {
         card.classList.remove('visible');
+        card.classList.remove('multi-select');
     }
 }
 
@@ -131,13 +223,34 @@ function cleanup3D() {
         miniRenderer.domElement.remove();
         miniRenderer = null;
     }
+
+    // Remove document-level event listeners
+    if (portraitMouseMoveHandler) {
+        document.removeEventListener('mousemove', portraitMouseMoveHandler);
+        portraitMouseMoveHandler = null;
+    }
+    if (portraitPointerUpHandler) {
+        document.removeEventListener('pointerup', portraitPointerUpHandler);
+        portraitPointerUpHandler = null;
+    }
+    if (portraitLockChangeHandler) {
+        document.removeEventListener('pointerlockchange', portraitLockChangeHandler);
+        portraitLockChangeHandler = null;
+    }
+
+    // Exit pointer lock if active
+    if (document.pointerLockElement) {
+        document.exitPointerLock();
+    }
+
     miniScene = null;
     miniCamera = null;
+    isDraggingPortrait = false;
 }
 
 const DEFAULT_SETTINGS = {
-    scale: 1.5,
-    posY: -0.39,
+    scale: 1.21,
+    posY: -0.14,
     rotY: 0.5277,
     fov: 25
 };
@@ -145,22 +258,34 @@ const DEFAULT_SETTINGS = {
 // Storage for per-unit settings
 const unitConfigs = {
     'skacal': {
-        scale: 1.5, // Matches Default
-        posY: -0.39,
+        scale: 1,
+        posY: 0.03,
         rotY: 0.5277,
-        fov: 25
+        fov: 20
     },
     'david': {
-        scale: 1.3,
-        posY: -0.26,
+        scale: 0.9,
+        posY: 0,
         rotY: 0.5277,
-        fov: 18.81
+        fov: 20
     },
     'ramon': {
-        scale: 1.5,
+        scale: 1,
         posY: -0.02,
         rotY: 0.5277,
-        fov: 25
+        fov: 19
+    },
+    'unknown_1': {
+        scale: 1,
+        posY: -0.02,
+        rotY: 0.5277,
+        fov: 20
+    },
+    'unknown_2': {
+        scale: 1,
+        posY: -0.02,
+        rotY: 0.5277,
+        fov: 20
     }
 };
 let currentUnitId = null;
@@ -194,6 +319,14 @@ export function initDevCardGUI(gui) {
     folder.add(configExport, 'save').name('💾 Save Portraits');
 }
 
+function refreshGUIControllers() {
+    // Update GUI sliders to show current unit's settings
+    if (guiControllers.scale) guiControllers.scale.updateDisplay();
+    if (guiControllers.posY) guiControllers.posY.updateDisplay();
+    if (guiControllers.rotY) guiControllers.rotY.updateDisplay();
+    if (guiControllers.fov) guiControllers.fov.updateDisplay();
+}
+
 function updatePortraitTransform() {
     if (miniScene && miniScene.children.length > 2) {
         const model = miniScene.children[miniScene.children.length - 1];
@@ -203,6 +336,10 @@ function updatePortraitTransform() {
             model.rotation.y = portraitSettings.rotY;
         }
     }
+    // Update target rotation for smooth return
+    targetRotY = portraitSettings.rotY;
+    currentRotY = portraitSettings.rotY;
+
     // Save to config
     if (currentUnitId) {
         unitConfigs[currentUnitId] = { ...portraitSettings };
@@ -221,37 +358,92 @@ function updateCameraFOV() {
 }
 
 function initMiniScene(container, modelPath) {
-    currentLoadId++; 
+    currentLoadId++;
     const w = container.clientWidth;
     const h = container.clientHeight;
     console.log(`DevCard 3D Init: Container Size ${w}x${h}`);
-    
+
     if (w === 0 || h === 0) {
         console.warn("DevCard 3D: Container has 0 dimensions, retrying...");
         setTimeout(() => initMiniScene(container, modelPath), 100);
         return;
     }
-    
+
     miniScene = new THREE.Scene();
 
     miniCamera = new THREE.PerspectiveCamera(portraitSettings.fov, w / h, 0.1, 100);
     miniCamera.position.set(0, 0.5, 3);
-    
+
     miniRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     miniRenderer.setSize(w, h);
     miniRenderer.outputColorSpace = THREE.SRGBColorSpace;
-    
+
     // Lighting
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
     miniScene.add(hemiLight);
-    
+
     const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
     dirLight.position.set(2, 5, 5);
     miniScene.add(dirLight);
 
+    // Initialize rotation state
+    currentRotY = portraitSettings.rotY;
+    targetRotY = portraitSettings.rotY;
+
+    // Interactive rotation - drag to spin portrait with pointer lock
+    const onPointerDown = (e) => {
+        e.stopPropagation(); // Prevent selection box from appearing
+        e.preventDefault();
+        isDraggingPortrait = true;
+
+        // Request pointer lock for infinite rotation
+        container.requestPointerLock();
+    };
+
+    portraitMouseMoveHandler = (e) => {
+        if (!isDraggingPortrait) return;
+
+        // Use movementX for pointer lock compatibility
+        const deltaX = e.movementX || 0;
+        currentRotY += deltaX * 0.01; // Sensitivity
+
+        // Apply rotation directly to model
+        if (miniScene && miniScene.children.length > 2) {
+            const model = miniScene.children[miniScene.children.length - 1];
+            if (model.type === 'Group') {
+                model.rotation.y = currentRotY;
+            }
+        }
+    };
+
+    portraitPointerUpHandler = (e) => {
+        if (isDraggingPortrait) {
+            e.stopPropagation();
+            isDraggingPortrait = false;
+
+            // Exit pointer lock
+            if (document.pointerLockElement === container) {
+                document.exitPointerLock();
+            }
+        }
+    };
+
+    // Pointer lock change handler
+    portraitLockChangeHandler = () => {
+        if (document.pointerLockElement !== container && isDraggingPortrait) {
+            isDraggingPortrait = false;
+        }
+    };
+
+    container.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('mousemove', portraitMouseMoveHandler);
+    document.addEventListener('pointerup', portraitPointerUpHandler);
+    document.addEventListener('pointerlockchange', portraitLockChangeHandler);
+    container.style.cursor = 'grab';
+
     const thisLoadId = currentLoadId; // Capture ID
     console.log(`DevCard 3D: Loading ${modelPath} (LoadID: ${thisLoadId})`);
-    
+
     loader.load(modelPath, (gltf) => {
         if (thisLoadId !== currentLoadId) {
             console.log(`DevCard: Stale load ignored (This: ${thisLoadId}, Current: ${currentLoadId})`);
@@ -259,27 +451,33 @@ function initMiniScene(container, modelPath) {
         }
 
         const model = gltf.scene;
-        
+
         // Initial set based on current settings
         model.scale.set(portraitSettings.scale, portraitSettings.scale, portraitSettings.scale);
         model.position.y = portraitSettings.posY;
         model.rotation.y = portraitSettings.rotY;
-        
+
         miniScene.add(model);
         console.log("DevCard 3D Model Loaded");
 
     }, undefined, (err) => console.error(err));
-    
+
     container.appendChild(miniRenderer.domElement);
     const animate = () => {
         if (!miniRenderer) return;
         miniReqId = requestAnimationFrame(animate);
-        
-        // Auto-rotation disabled
-        // if (miniScene.children.length > 2) {
-        //      const model = miniScene.children[miniScene.children.length-1];
-        //      if(model.type === 'Group') model.rotation.y += 0.01;
-        // }
+
+        // Smooth return to default rotation when not dragging
+        if (!isDraggingPortrait && miniScene && miniScene.children.length > 2) {
+            const model = miniScene.children[miniScene.children.length - 1];
+            if (model.type === 'Group') {
+                const diff = targetRotY - currentRotY;
+                if (Math.abs(diff) > 0.001) {
+                    currentRotY += diff * 0.08; // Smooth lerp back
+                    model.rotation.y = currentRotY;
+                }
+            }
+        }
 
         miniRenderer.render(miniScene, miniCamera);
     };

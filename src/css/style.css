@@ -204,16 +204,9 @@ body::after {
 
 
 
-/* Cursor Marker Logic (Still valid) */
+/* Cursor Marker Logic - A-Move command feedback */
 .amove-marker {
-  position: fixed; /* Fixed because clicks might happen relative to viewport */
-  /* ... rest same as before ... */
-}
-/* Re-include marker styles from before but simplified if needed, 
-   keeping the core animation classes 
-*/
-.amove-marker {
-  position: absolute; /* Actually absolute to document body is better for scroll pages usually, typically appended to body */
+  position: fixed; /* Fixed for viewport-relative click coordinates */
   width: 50px;
   height: 50px;
   pointer-events: none;
@@ -343,6 +336,25 @@ body::after {
         0 0 var(--devs-glow-3) rgba(0, 255, 255, 0.3);
 }
 
+.section-marionette {
+    min-height: 50vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4rem 2rem;
+}
+
+.section-marionette h2 {
+    font-size: 6rem;
+    letter-spacing: 8px;
+    text-align: center;
+    text-shadow:
+        0 0 var(--devs-glow-1) rgba(0, 255, 255, 0.8),
+        0 0 var(--devs-glow-2) rgba(0, 255, 255, 0.5),
+        0 0 var(--devs-glow-3) rgba(0, 255, 255, 0.3);
+}
+
+
 .section-devs {
     flex-direction: column;
     gap: 2rem;
@@ -440,11 +452,28 @@ body::after {
 }
 
 .contact-link:hover {
-    color: #fff;
-    border-color: #00ffff;
-    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
-    background: rgba(0, 255, 255, 0.1);
-    transform: translateY(-2px);
+    color: #888;
+    border-color: #666;
+    box-shadow: none;
+    background: transparent;
+    transform: none;
+}
+
+.contact-coming-soon {
+    position: relative;
+}
+
+.contact-coming-soon:hover {
+    color: transparent;
+}
+
+.contact-coming-soon:hover::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #888;
+    white-space: nowrap;
 }
 
 /* --- ETHOS GRID --- */
@@ -597,12 +626,6 @@ body::after {
     position: absolute;
     bottom: 20px;
     left: 20px;
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), left 0s, right 0s; /* Instant swap for pos */
-}
-
-.dev-card.alt-pos {
-    left: auto;
-    right: 20px;
     width: 340px;
     background: rgba(5, 10, 20, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -613,12 +636,19 @@ body::after {
     gap: 15px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 255, 0.1);
     backdrop-filter: blur(10px);
-    
-    /* Animation State */
+
+    /* Default hidden state */
     opacity: 0;
-    transform: translateX(50px);
+    transform: translateX(-50px);
+    pointer-events: none;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     z-index: 10;
+}
+
+.dev-card.alt-pos {
+    left: auto;
+    right: 20px;
+    transform: translateX(50px);
 }
 
 .dev-card.visible {
@@ -707,4 +737,74 @@ body::after {
     pointer-events: none; /* Let clicks pass through */
     z-index: 100;
     display: none;
+}
+
+/* --- MULTI-UNIT SELECTION BAR --- */
+.dev-selection-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.selection-count {
+    font-size: 0.7rem;
+    color: #00ffff;
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+}
+
+.selection-portraits {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.selection-portrait {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.selection-portrait:hover {
+    transform: scale(1.1);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+.selection-portrait.active {
+    transform: scale(1.15);
+    border-width: 3px;
+}
+
+/* Compact card when multi-select */
+.dev-card.multi-select .dev-img-container {
+    width: 140px;
+    height: 140px;
+}
+
+.dev-card.multi-select .dev-header-text h3 {
+    font-size: 1.1rem;
+}
+
+.dev-card.multi-select .dev-stats {
+    gap: 6px;
+}
+
+.dev-card.multi-select .stat-label {
+    font-size: 0.7rem;
+}
+
+.dev-card.multi-select .stat-bar-bg {
+    height: 5px;
 }

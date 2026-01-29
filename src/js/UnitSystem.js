@@ -2,6 +2,7 @@ import { tileList, tilesMap, getGridMesh } from './HexGrid.js';
 import { registerFogUnits } from './FogSystem.js';
 import { showDevCard, hideDevCard, initDevCardGUI } from './DevCardUI.js';
 import { findPath, findClosestLand } from './Pathfinder.js';
+import { initDiscoveryEffect, triggerDiscovery } from './DiscoveryEffect.js';
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -54,7 +55,8 @@ const UNITS = [
             { label: 'CUDA Cores', value: 5 }
         ],
         color: '#a855f7', // Purple
-        img: '?'
+        img: 'assets/3D/unknown.glb',
+        hidden: true
     },
     {
         id: 'unknown_2',
@@ -66,7 +68,8 @@ const UNITS = [
             { label: 'Sleep', value: 20 }
         ],
         color: '#f59e0b', // Amber
-        img: '?'
+        img: 'assets/3D/unknown.glb',
+        hidden: true
     }
 ];
 
@@ -92,8 +95,11 @@ const hoverState = {
 
 export function initUnits(scene, camera, container) {
     cameraRef = camera;
-    domRef = container; 
+    domRef = container;
     scene.add(unitGroup);
+
+    // Initialize discovery celebration effects
+    initDiscoveryEffect(scene);
 
     // Create Selection Box
     selectionBox = document.createElement('div');
@@ -129,8 +135,8 @@ function spawnUnits() {
         return da - db;
     }); // We need full list for random picking later
 
-    const knownUnits = UNITS.filter(u => u.img !== '?');
-    const unknownUnits = UNITS.filter(u => u.img === '?');
+    const knownUnits = UNITS.filter(u => !u.hidden);
+    const unknownUnits = UNITS.filter(u => u.hidden);
 
     // Spawn Known Units (Clusters)
     knownUnits.forEach((data, i) => {
@@ -320,9 +326,9 @@ function handleBoxSelect(x1, y1, x2, y2, width, height) {
 
 
 function onRightClick(event) {
-    event.preventDefault(); 
+    event.preventDefault();
 
-    if (hoverState.selectedUnits.length === 0) return; 
+    if (hoverState.selectedUnits.length === 0) return;
 
     const rect = domRef.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -338,10 +344,10 @@ function onRightClick(event) {
     if (intersects.length > 0) {
         const hit = intersects[0];
         const instanceId = hit.instanceId;
-        
+
         if (instanceId !== undefined && tileList[instanceId]) {
             let targetTile = tileList[instanceId];
-            
+
             // Handle Water Clicks
             if (targetTile.type === 'WATER') {
                 console.log("Clicked Water, finding closest land...");
@@ -357,8 +363,33 @@ function onRightClick(event) {
 
             console.log("Moving Group to:", targetTile.id);
             moveGroup(hoverState.selectedUnits, targetTile, instanceId);
+
+            // Spawn A-Move marker at click position
+            spawnAMoveMarker(event.clientX, event.clientY);
         }
     }
+}
+
+// A-Move marker animation - RTS-style move command feedback
+function spawnAMoveMarker(x, y) {
+    console.log('A-Move marker spawned at:', x, y);
+    const marker = document.createElement('div');
+    marker.className = 'amove-marker';
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
+
+    for (let i = 0; i < 4; i++) {
+        const arrow = document.createElement('div');
+        arrow.className = 'arrow';
+        arrow.style.setProperty('--angle', (i * 90) + 'deg');
+        marker.appendChild(arrow);
+    }
+
+    document.body.appendChild(marker);
+
+    setTimeout(() => {
+        marker.remove();
+    }, 500);
 }
 
 function moveGroup(units, targetTile, targetIndex) {
@@ -455,13 +486,17 @@ function selectUnits(units) {
         units.forEach(u => {
             u.scale.set(1.2, 1.2, 1.2);
             if(u.material.emissive) {
-                u.material.emissiveIntensity = 0.8; 
+                u.material.emissiveIntensity = 0.8;
             }
         });
 
-         const rect = domRef.getBoundingClientRect();
-         const screenPos = toScreenPosition(units[0], cameraRef, rect.width, rect.height);
-         showDevCard(units[0].userData.data, screenPos, rect.width, rect.height);
+        const rect = domRef.getBoundingClientRect();
+        const screenPos = toScreenPosition(units[0], cameraRef, rect.width, rect.height);
+
+        // Pass all selected units' data to card (supports multi-select display)
+        const allUnitData = units.map(u => u.userData.data);
+        showDevCard(allUnitData, screenPos, rect.width, rect.height);
+    } else {
         hideDevCard();
     }
 }
@@ -515,15 +550,19 @@ export function updateUnits(time) {
             unitGroup.children.forEach(other => {
                 if (other.userData && other.userData.locked) {
                     const d = mesh.position.distanceTo(other.position);
-                    if (d < 1.5) {
+                    if (d < 3) {
                         // UNLOCK!
                         other.userData.locked = false;
                         other.userData.discovered = true;
-                        
+
                         // Reveal Visuals
                         other.visible = true;
 
                         console.log(`Discovered: ${other.userData.data.name}`);
+
+                        // RPG-style celebration effect!
+                        triggerDiscovery(other.position, other.userData.data.color);
+
                         other.position.y += 1.0; // Jump up
                     }
                 }

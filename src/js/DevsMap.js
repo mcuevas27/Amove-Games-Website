@@ -9,6 +9,7 @@ import { initHexGrid, updateGrid } from './HexGrid.js';
 import { initUnits, updateUnits, initUnitGUI } from './UnitSystem.js';
 import { initDevCardGUI } from './DevCardUI.js';
 import { initFog, updateFog } from './FogSystem.js';
+import { updateDiscoveryEffects } from './DiscoveryEffect.js';
 
 let scene, camera, renderer, composer, controls;
 let animationId = null;
@@ -84,8 +85,17 @@ export function initDevsMap(containerId) {
     const dirLight = new THREE.DirectionalLight(0xffffff, SETTINGS.lighting.dirLightIntensity);
     dirLight.position.set(...SETTINGS.lighting.dirLightPos);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+
+    // Expand shadow camera frustum to cover entire map
+    dirLight.shadow.camera.left = -25;
+    dirLight.shadow.camera.right = 25;
+    dirLight.shadow.camera.top = 25;
+    dirLight.shadow.camera.bottom = -25;
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 60;
+
     scene.add(dirLight);
 
     // Composer (Bloom)
@@ -187,6 +197,7 @@ function animate() {
     updateGrid(time);
     updateFog(time);
     updateUnits(time);
+    updateDiscoveryEffects(0.016); // ~60fps delta
 
     composer.render();
 }

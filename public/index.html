@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>A-Move Games | Protocol</title>
-    <link rel="stylesheet" href="../src/css/style.css?v=3">
+    <link rel="stylesheet" href="../src/css/style.css?v=4">
     <script type="importmap">
         {
             "imports": {
@@ -35,6 +35,12 @@
             </div>
             <div class="hero-subtitle">EST. 2026 // North America</div>
             <div class="hero-quote">Fast Action Real-Time Strategy</div>
+        </section>
+
+        <section id="marionette" class="section-marionette">
+            <div class="marionette-content">
+                <h2 class="text-scanline title-cyan">Coming Soon:<br>Project Marionette</h2>
+            </div>
         </section>
 
         <section id="devs" class="section-devs">
@@ -95,9 +101,9 @@
         <section id="contact" class="section-contact">
              <h2 class="text-scanline title-white">CONTACT</h2>
              <div class="contact-links">
-                 <a href="#" class="contact-link">TWITTER/X</a>
-                 <a href="#" class="contact-link">DISCORD</a>
-                 <a href="mailto:contact@amove.games" class="contact-link">EMAIL</a>
+                 <a href="javascript:void(0);" class="contact-link contact-coming-soon" data-text="COMING SOON">TWITTER/X</a>
+                 <a href="javascript:void(0);" class="contact-link contact-coming-soon" data-text="COMING SOON">DISCORD</a>
+                 <a href="javascript:void(0);" class="contact-link contact-coming-soon" data-text="COMING SOON">EMAIL</a>
              </div>
         </section>
 
@@ -513,32 +519,8 @@
              simUniforms.uResolutionRatio.value = canvasSize.w / canvasSize.h;
         });
 
-        document.addEventListener('click', (e) => {
-            spawnAMoveMarker(e.clientX, e.clientY + window.scrollY); // Account for scroll
-        });
-
-        function spawnAMoveMarker(x, y) {
-            const marker = document.createElement('div');
-            marker.className = 'amove-marker';
-            marker.style.left = x + 'px';
-            marker.style.top = y + 'px';
-            
-            for(let i=0; i<4; i++) {
-                const arrow = document.createElement('div');
-                arrow.className = 'arrow';
-                if (i===0) arrow.style.setProperty('--angle', '0deg');
-                if (i===1) arrow.style.setProperty('--angle', '90deg');
-                if (i===2) arrow.style.setProperty('--angle', '180deg');
-                if (i===3) arrow.style.setProperty('--angle', '270deg');
-                marker.appendChild(arrow);
-            }
-            
-            document.body.appendChild(marker);
-            
-            setTimeout(() => {
-                marker.remove();
-            }, 500);
-        }
+        // A-Move marker disabled globally - now only used in Devs Map on move command
+        // See src/js/UnitSystem.js for implementation
 
         const clock = new THREE.Clock();
 
