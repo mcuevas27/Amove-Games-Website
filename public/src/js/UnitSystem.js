@@ -58,11 +58,11 @@ const UNITS = [
         name: 'Unknown 1',
         role: 'Principal 3D Artist',
         stats: [
-            { label: 'World Building', value: 99 },
-            { label: 'CUDA Cores', value: 30 },
-            { label: 'Narrative Design', value: 83 },
-            { label: 'Story', value: 90 },
-            { label: 'BBQ', value: 88 }
+            { label: 'Writing', value: 70 },
+            { label: 'Sass', value: 10 },
+            { label: 'Pipeline', value: 60 },
+            { label: 'Content Design', value: 50 },
+            { label: '3D Art', value: 90 }
            
         ],
         color: '#a855f7', // Purple
@@ -70,8 +70,8 @@ const UNITS = [
         hidden: true
     },
     {
-        id: 'unknown_2',
-        name: 'Unknown 2',
+        id: 'cuevas',
+        name: 'Cuevas',
         role: 'Art Director',
         stats: [
             { label: 'Kalguksu', value: 15 },
@@ -83,8 +83,7 @@ const UNITS = [
             
         ],
         color: '#f59e0b', // Amber
-        img: 'assets/3D/model_u4.glb',
-        hidden: true
+        img: 'assets/3D/model_c5.glb'
     }
 ];
 

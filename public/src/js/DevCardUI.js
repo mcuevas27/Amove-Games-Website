@@ -92,6 +92,9 @@ export function showDevCard(dataArray, focusPos, w, h) {
     // Apply Debug Layout Settings
     updateCardLayout();
 
+    // Ensure tooltips are initialized
+    initRadarTooltips();
+
     // Build card content
     renderCardContent(card, units, 0);
 
@@ -267,8 +270,14 @@ function generateRadarChart(stats, color) {
     `;
 }
 
-// Tooltip Management
+
+
+// Initialize tooltips once (Lazy init)
+let tooltipsInitialized = false;
+
 function initRadarTooltips() {
+    if (tooltipsInitialized) return;
+    
     let tooltip = document.getElementById('dev-radar-tooltip');
     if (!tooltip) {
         tooltip = document.createElement('div');
@@ -290,7 +299,7 @@ function initRadarTooltips() {
                 `;
                 tooltip.style.display = 'block';
                 
-                // Position near the point, but global
+                // Position near the point
                 const rect = e.target.getBoundingClientRect();
                 tooltip.style.left = `${rect.left + window.scrollX}px`;
                 tooltip.style.top = `${rect.top + window.scrollY - 40}px`; // Shift up
@@ -304,10 +313,9 @@ function initRadarTooltips() {
             tooltip.style.display = 'none';
         }
     });
+    
+    tooltipsInitialized = true;
 }
-
-// Initialize tooltips once
-initRadarTooltips();
 
 function getPortraitContent(data) {
     if (data.img === '?') {
@@ -479,6 +487,12 @@ const unitConfigs = {
         fov: 20
     },
     'unknown_2': {
+        scale: 1,
+        posY: -0.02,
+        rotY: 0.5277,
+        fov: 20
+    },
+    'cuevas': {
         scale: 1,
         posY: -0.02,
         rotY: 0.5277,
