@@ -5,6 +5,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const loader = new GLTFLoader();
 
+const MOBILE_BREAKPOINT = 768;
+
+function isMobile() {
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+}
+
 let cardContainer = null;
 let currentTimeout = null;
 // 3D Scene State
@@ -42,18 +48,34 @@ export function showDevCard(dataArray, focusPos, w, h) {
     selectedUnitsData = units;
     currentViewIndex = 0;
 
-    const container = document.getElementById('devs-map-container');
+    const mobile = isMobile();
+    const mapContainer = document.getElementById('devs-map-container');
+    const mobileContainer = document.getElementById('devs-mobile-card');
+    const targetContainer = mobile ? mobileContainer : mapContainer;
+
+    // Remove empty state on mobile when showing a card
+    if (mobile && mobileContainer) {
+        const emptyState = mobileContainer.querySelector('.devs-mobile-card-empty');
+        if (emptyState) emptyState.remove();
+    }
+
     let card = document.getElementById('dev-unit-card');
+
+    // If card exists in wrong container, move it
+    if (card && card.parentElement !== targetContainer) {
+        card.remove();
+        card = null;
+    }
 
     if (!card) {
         card = document.createElement('div');
         card.id = 'dev-unit-card';
         card.className = 'dev-card';
-        if (container) container.appendChild(card);
+        if (targetContainer) targetContainer.appendChild(card);
         else document.body.appendChild(card);
     }
 
-    // Reset Position
+    // Reset Position (only relevant for desktop)
     card.classList.remove('alt-pos');
 
     // Multi-unit mode class
@@ -63,8 +85,8 @@ export function showDevCard(dataArray, focusPos, w, h) {
         card.classList.remove('multi-select');
     }
 
-    // Dynamic Positioning Logic
-    if (focusPos && w && h) {
+    // Dynamic Positioning Logic (desktop only)
+    if (!mobile && focusPos && w && h) {
         const isBottomLeft = focusPos.x < 380 && focusPos.y > (h - 400);
         if (isBottomLeft) {
             card.classList.add('alt-pos');
@@ -211,6 +233,71 @@ export function hideDevCard() {
         card.classList.remove('visible');
         card.classList.remove('multi-select');
     }
+
+    // Show empty state on mobile
+    if (isMobile()) {
+        showMobileEmptyState();
+    }
+}
+
+function showMobileEmptyState() {
+    const mobileContainer = document.getElementById('devs-mobile-card');
+    if (!mobileContainer) return;
+
+    // Remove existing card if any
+    const existingCard = document.getElementById('dev-unit-card');
+    if (existingCard && existingCard.parentElement === mobileContainer) {
+        existingCard.remove();
+    }
+
+    // Show empty state if not already present
+    let emptyState = mobileContainer.querySelector('.devs-mobile-card-empty');
+    if (!emptyState) {
+        emptyState = document.createElement('div');
+        emptyState.className = 'devs-mobile-card-empty';
+        emptyState.textContent = 'TAP A UNIT TO VIEW DETAILS';
+        mobileContainer.appendChild(emptyState);
+    }
+}
+
+// Initialize mobile empty state on load
+export function initMobileCardState() {
+    if (isMobile()) {
+        showMobileEmptyState();
+    }
+
+    // Update on resize
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        // Debounce resize handling
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            const card = document.getElementById('dev-unit-card');
+            const hasSelection = card && card.classList.contains('visible');
+            const mobile = isMobile();
+            const mapContainer = document.getElementById('devs-map-container');
+            const mobileContainer = document.getElementById('devs-mobile-card');
+
+            // Move card to correct container if selection exists
+            if (hasSelection && card) {
+                const targetContainer = mobile ? mobileContainer : mapContainer;
+                if (card.parentElement !== targetContainer && targetContainer) {
+                    card.remove();
+                    targetContainer.appendChild(card);
+                }
+            }
+
+            if (mobile && !hasSelection) {
+                showMobileEmptyState();
+            } else if (!mobile) {
+                // Remove empty state on desktop
+                if (mobileContainer) {
+                    const emptyState = mobileContainer.querySelector('.devs-mobile-card-empty');
+                    if (emptyState) emptyState.remove();
+                }
+            }
+        }, 100);
+    });
 }
 
 function cleanup3D() {

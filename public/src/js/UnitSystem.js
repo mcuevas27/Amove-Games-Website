@@ -1,6 +1,6 @@
 import { tileList, tilesMap, getGridMesh } from './HexGrid.js';
 import { registerFogUnits } from './FogSystem.js';
-import { showDevCard, hideDevCard, initDevCardGUI } from './DevCardUI.js';
+import { showDevCard, hideDevCard, initDevCardGUI, initMobileCardState } from './DevCardUI.js';
 import { findPath, findClosestLand } from './Pathfinder.js';
 import { initDiscoveryEffect, triggerDiscovery } from './DiscoveryEffect.js';
 
@@ -104,16 +104,24 @@ export function initUnits(scene, camera, container) {
     // Create Selection Box
     selectionBox = document.createElement('div');
     selectionBox.className = 'selection-box';
-    container.appendChild(selectionBox); 
+    container.appendChild(selectionBox);
 
     spawnUnits();
 
     registerFogUnits(unitGroup.children);
 
+    // Initialize mobile card state (empty state on mobile)
+    initMobileCardState();
+
     container.addEventListener('mousemove', onMouseMove);
     container.addEventListener('mousedown', onMouseDown);
     container.addEventListener('mouseup', onMouseUp);
-    container.addEventListener('contextmenu', onRightClick); 
+    container.addEventListener('contextmenu', onRightClick);
+
+    // Touch support for mobile
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: false });
 }
 
 function spawnUnits() {
@@ -200,13 +208,110 @@ function createUnitMesh(data, tile, isLocked) {
     unitGroup.add(mesh);
 }
 
+// --- TOUCH HANDLERS (Mobile) --- //
+function onTouchStart(event) {
+    if (event.touches.length !== 1) return;
+    event.preventDefault();
+
+    const touch = event.touches[0];
+    const rect = domRef.getBoundingClientRect();
+    isDragging = true;
+    startPos.x = touch.clientX - rect.left;
+    startPos.y = touch.clientY - rect.top;
+
+    // Don't show selection box immediately on touch (wait to see if it's a tap)
+    selectionBox.style.display = 'none';
+}
+
+function onTouchMove(event) {
+    if (!isDragging || event.touches.length !== 1) return;
+    event.preventDefault();
+
+    const touch = event.touches[0];
+    const rect = domRef.getBoundingClientRect();
+    const currentX = touch.clientX - rect.left;
+    const currentY = touch.clientY - rect.top;
+
+    const dist = Math.sqrt((currentX - startPos.x) ** 2 + (currentY - startPos.y) ** 2);
+
+    // Only show selection box if dragging beyond threshold
+    if (dist > 10) {
+        selectionBox.style.display = 'block';
+        selectionBox.style.zIndex = '99999';
+        selectionBox.style.backgroundColor = 'rgba(0, 255, 255, 0.2)';
+        selectionBox.style.border = '1px solid #00ffff';
+
+        const width = Math.abs(currentX - startPos.x);
+        const height = Math.abs(currentY - startPos.y);
+        const left = Math.min(currentX, startPos.x);
+        const top = Math.min(currentY, startPos.y);
+
+        selectionBox.style.width = width + 'px';
+        selectionBox.style.height = height + 'px';
+        selectionBox.style.left = left + 'px';
+        selectionBox.style.top = top + 'px';
+    }
+}
+
+function onTouchEnd(event) {
+    if (!isDragging) return;
+    isDragging = false;
+    selectionBox.style.display = 'none';
+
+    const rect = domRef.getBoundingClientRect();
+
+    // Use changedTouches for the touch that ended
+    const touch = event.changedTouches[0];
+    const endX = touch.clientX - rect.left;
+    const endY = touch.clientY - rect.top;
+
+    const dist = Math.sqrt((endX - startPos.x) ** 2 + (endY - startPos.y) ** 2);
+
+    if (dist < 10) {
+        // Tap - treat as single click
+        handleTouchTap(touch, rect);
+    } else {
+        // Drag - box select
+        handleBoxSelect(startPos.x, startPos.y, endX, endY, rect.width, rect.height);
+    }
+}
+
+function handleTouchTap(touch, rect) {
+    mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, cameraRef);
+    const intersects = raycaster.intersectObjects(unitGroup.children, true);
+
+    if (intersects.length > 0) {
+        let hitObj = intersects[0].object;
+
+        while (hitObj) {
+            if (hitObj.userData && hitObj.userData.isUnit) {
+                if (hitObj.userData.locked) {
+                    console.log("Unit is locked/undiscovered.");
+                    return;
+                }
+
+                selectUnits([hitObj]);
+                return;
+            }
+            hitObj = hitObj.parent;
+            if (hitObj === unitGroup || hitObj === null) break;
+        }
+        selectUnits([]);
+    } else {
+        selectUnits([]);
+    }
+}
+
 // --- DRAG SELECTION --- //
 function onMouseDown(event) {
-    if (event.button !== 0) return; 
+    if (event.button !== 0) return;
 
-    // Prevent interaction if hovering over locked unit? 
+    // Prevent interaction if hovering over locked unit?
     // Handled in click logic mostly.
-    
+
     const rect = domRef.getBoundingClientRect();
     isDragging = true;
     startPos.x = event.clientX - rect.left;
@@ -217,7 +322,7 @@ function onMouseDown(event) {
     selectionBox.style.left = startPos.x + 'px';
     selectionBox.style.top = startPos.y + 'px';
     selectionBox.style.display = 'block';
-    
+
     selectionBox.style.zIndex = '99999';
     selectionBox.style.backgroundColor = 'rgba(0, 255, 255, 0.2)';
     selectionBox.style.border = '1px solid #00ffff';
