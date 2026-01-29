@@ -658,6 +658,14 @@ body::after {
     box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
     backdrop-filter: blur(5px);
     margin: 0 auto; /* Center it */
+    
+    /* Disable selection and native UI on mobile */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -webkit-touch-callout: none; /* Disables the long-press menu on iOS */
+    touch-action: none; /* Prevents browser scrolling/zooming */
 }
 
 .devs-map-container canvas {
