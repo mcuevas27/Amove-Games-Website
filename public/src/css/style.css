@@ -25,7 +25,8 @@ html {
 
 /* Debug GUI - hidden for previews */
 .lil-gui {
-    display: none !important;
+    /* display: none !important; */
+    z-index: 1000 !important;
 }
 
 /* Fixed Background Canvas */
@@ -674,24 +675,21 @@ body::after {
 }
 
 /* --- DEV UNIT CARD --- */
+/* --- DEV UNIT CARD --- */
 .dev-card {
     position: absolute;
-    bottom: 20px;
+    bottom: 10px; /* Lower overall */
     left: 20px;
-    width: 340px;
-    background: rgba(5, 10, 20, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 20px;
+    min-width: 280px;
+    
     display: flex;
-    flex-direction: column;
-    gap: 15px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-
+    flex-direction: row; /* Side-by-side */
+    align-items: flex-end; /* Align bottom */
+    gap: 20px;
+    
     /* Default hidden state */
     opacity: 0;
-    transform: translateX(-50px);
+    transform: translateY(20px);
     pointer-events: none;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     z-index: 10;
@@ -705,148 +703,91 @@ body::after {
 
 .dev-card.visible {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
     pointer-events: auto;
 }
 
-.dev-card-header {
+/* --- COMPACT CARD LAYOUT (Desktop) --- */
+.dev-card-compact {
+    /* REMOVED BACKGROUND/BORDER - Elements floating */
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    padding: 0;
+    pointer-events: auto;
+
     display: flex;
-    align-items: center;
-    gap: 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 15px;
+    flex-direction: row; /* Text Next to Chart */
+    align-items: center; 
+    gap: 20px;
+    width: auto;
+    /* Push text/chart down relative to portrait */
+    transform: translateY(15px); 
+    margin-bottom: 0;
 }
 
-.dev-img-container {
-    width: 200px;
-    height: 200px;
-    border-radius: 8px;
-    border: 3px solid #fff;
-    overflow: hidden;
-    flex-shrink: 0;
+/* EXTERNAL PORTRAIT */
+.dev-portrait-external {
+    position: relative;
+    z-index: 20;
+    margin: 0; /* Reset margins */
+    pointer-events: auto;
+}
+
+.dev-portrait-external .dev-img-container {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
     background: #000;
 }
 
-.dev-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.dev-header-text h3 {
-    margin: 0;
-    font-size: 1.4rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.dev-role {
-    font-size: 0.9rem;
-    color: #888;
-    font-family: 'Share Tech Mono', monospace;
-}
-
-.dev-stats {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.stat-row {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-
-.stat-label {
-    font-size: 0.8rem;
-    color: #aaa;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.stat-bar-bg {
-    width: 100%;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-    overflow: hidden;
-}
-
-.stat-bar-fill {
-    height: 100%;
-    background: #fff;
-    border-radius: 3px;
-    width: 0%;
-    transition: width 1s ease-out;
-}
-
-/* --- SELECTION BOX --- */
-.selection-box {
-    position: absolute;
-    border: 1px solid #00ffff;
-    background: rgba(0, 255, 255, 0.1);
-    pointer-events: none; /* Let clicks pass through */
-    z-index: 100;
-    display: none;
-}
-
-/* --- MULTI-UNIT SELECTION BAR --- */
-.dev-selection-bar {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-bottom: 12px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.selection-count {
-    font-size: 0.7rem;
-    color: #00ffff;
-    font-family: 'Share Tech Mono', monospace;
-    letter-spacing: 2px;
-    text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
-}
-
-.selection-portraits {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.selection-portrait {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    background: rgba(0, 0, 0, 0.6);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.selection-portrait:hover {
-    transform: scale(1.1);
-    border-color: rgba(255, 255, 255, 0.8);
-}
-
-.selection-portrait.active {
-    transform: scale(1.15);
+/* Compact Image */
+.dev-card-compact .dev-img-container,
+.dev-portrait-external .dev-img-container {
+    width: 160px;
+    height: 160px;
     border-width: 3px;
+    border-radius: 12px;
 }
 
-/* Compact card when multi-select */
-.dev-card.multi-select .dev-img-container {
-    width: 140px;
-    height: 140px;
+/* Push text down to avoid portrait overlap (RESET) */
+.dev-card-compact .dev-text {
+    margin-top: 0;
+    padding-left: 5px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8); /* Add shadow for legibility */
 }
 
-.dev-card.multi-select .dev-header-text h3 {
-    font-size: 1.1rem;
+.dev-card-compact .dev-text h3 {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+/* ... existing styles ... */
+
+/* Radar Chart Container */
+.radar-chart-container {
+    width: 250px;
+    height: 220px; /* Chart dictates height of the row */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 0;
+}
+
+.radar-chart-svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible; /* Allow labels to bleed slightly */
+}
+
+/* Radar Points */
+.radar-point {
+    cursor: pointer;
+    transition: r 0.2s ease, stroke-width 0.2s ease;
+}
+
+.radar-point:hover {
+    r: 6;
+    stroke-width: 2;
 }
 
 .dev-card.multi-select .dev-stats {
@@ -861,12 +802,103 @@ body::after {
     height: 5px;
 }
 
-/* --- MOBILE EXTERNAL DEV CARD PANEL --- */
+/* --- MULTI-SELECT SIDEBAR --- */
+.dev-selection-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    margin-right: 10px;
+    padding-right: 15px;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.selection-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.sel-count {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #fff;
+    line-height: 1;
+}
+
+.sel-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 1px;
+}
+
+.selection-portraits {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.selection-portrait {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    overflow: hidden;
+}
+
+.selection-portrait:hover {
+    transform: scale(1.15);
+    border-color: #fff !important; /* Override inline style on hover */
+}
+
+.selection-portrait.active {
+    transform: scale(1.1);
+    border-width: 2px;
+}
+
+/* Ensure initials fit nicely */
+.selection-portrait span {
+    font-family: 'Share Tech Mono', monospace; 
+    line-height: 1;
+    margin-top: 2px; /* Visual center adjustment */
+}
+
+/* --- EXTERNAL DEV CARD PANEL --- */
 .devs-mobile-card {
-    display: none; /* Hidden on desktop */
+    display: none; /* Revert: Hidden by default on desktop */
     width: 90%;
-    max-width: 1400px;
+    max-width: 800px;
     margin: 0 auto;
+}
+
+/* Revert: Allow internal card to show */
+.devs-map-container .dev-card {
+    /* Display handled by JS toggling .visible class */
+}
+
+/* Ensure card inside external panel behaves like a block */
+.devs-mobile-card .dev-card {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    width: 100%;
+    max-width: 100%;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    display: flex;
+    margin: 0;
 }
 
 /* Mobile Responsive Styles */
@@ -884,7 +916,7 @@ body::after {
         max-height: 400px;
         border-radius: 8px;
     }
-
+    
     /* Hide internal card on mobile */
     .devs-map-container .dev-card {
         display: none !important;
@@ -896,50 +928,59 @@ body::after {
         width: 100%;
     }
 
-    /* Mobile card styling - reuse dev-card but positioned normally */
+
+
+    /* Mobile: Adapt new external portrait structure */
     .devs-mobile-card .dev-card {
-        position: relative;
-        bottom: auto;
-        left: auto;
-        right: auto;
+        align-items: center; /* Center portrait on mobile */
+    }
+
+    .devs-mobile-card .dev-portrait-external {
+        margin-left: 0;
+        margin-bottom: -20px; /* Overlap more on mobile */
+    }
+
+    .devs-mobile-card .dev-card-compact {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding-top: 25px; /* Make room for overlapping portrait */
+    }
+
+    .devs-mobile-card .dev-compact-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    /* .dev-img-container sizes handled by generic or specific rules above */
+    
+    .devs-mobile-card .dev-stats-grid {
+        grid-template-columns: 1fr; /* Single column stats on mobile */
         width: 100%;
-        max-width: 100%;
-        opacity: 1;
-        transform: none;
-        pointer-events: auto;
-        display: flex;
-        margin: 0;
+        text-align: left;
     }
+    
+    /* Custom Radar Tooltip */
+.dev-radar-tooltip {
+    position: absolute;
+    background: rgba(10, 15, 25, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 12px;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 2000;
+    font-family: 'Share Tech Mono', monospace;
+    display: none;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
+    text-align: center;
+    white-space: nowrap;
+}
 
-    /* Smaller portrait on mobile */
-    .devs-mobile-card .dev-img-container {
-        width: 120px;
-        height: 120px;
-    }
-
-    .devs-mobile-card .dev-card-header {
-        gap: 12px;
-        padding-bottom: 12px;
-    }
-
-    .devs-mobile-card .dev-header-text h3 {
-        font-size: 1.1rem;
-    }
-
-    .devs-mobile-card .dev-role {
-        font-size: 0.8rem;
-    }
-
-    .devs-mobile-card .dev-stats {
-        gap: 8px;
-    }
-
-    .devs-mobile-card .stat-label {
-        font-size: 0.7rem;
-    }
-
-    .devs-mobile-card .stat-bar-bg {
-        height: 5px;
+    .devs-mobile-card .stat-item {
+        justify-content: space-between;
+        padding: 5px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
     }
 
     /* Mobile multi-select adjustments */

@@ -15,8 +15,11 @@ const UNITS = [
         role: 'Tech Director',
         stats: [
             { label: 'Roll Forward Tech', value: 95 },
-            { label: 'Unity Engine', value: 90 },
+            { label: 'UNITY', value: 70 },
+            { label: 'Server', value: 90 },
+            { label: 'Live Operations', value: 99 },
             { label: 'AYCE Sushi', value: 80 }
+           
         ],
         color: '#e11d48', // Red
         img: 'assets/3D/model_s3.glb'
@@ -26,9 +29,12 @@ const UNITS = [
         name: 'Ramon Zarate',
         role: 'Principal Engineer',
         stats: [
+            { label: 'Office Space', value: 15 },
             { label: 'Canadian', value: 85 },
-            { label: 'Gameplay', value: 100 },
-            { label: 'Office Space', value: 15 }
+            { label: 'Gameplay', value: 99 },
+            { label: 'UNITY', value: 89 },
+            { label: 'Pineapple Pizza', value: 65 }
+            
         ],
         color: '#22c55e', // Green
         img: 'assets/3D/model_r2.glb'
@@ -40,6 +46,8 @@ const UNITS = [
         stats: [
             { label: 'Design', value: 92 },
             { label: 'Balance', value: 99 },
+            { label: 'Top Ace', value: 90 },
+            { label: 'n00b', value: 95 },
             { label: 'Politics', value: 2 }
         ],
         color: '#3b82f6', // Blue
@@ -50,9 +58,12 @@ const UNITS = [
         name: 'Unknown 1',
         role: 'Principal 3D Artist',
         stats: [
-            { label: 'World Building', value: 100 },
+            { label: 'World Building', value: 99 },
+            { label: 'CUDA Cores', value: 30 },
+            { label: 'Narrative Design', value: 83 },
             { label: 'Story', value: 90 },
-            { label: 'CUDA Cores', value: 5 }
+            { label: 'BBQ', value: 88 }
+           
         ],
         color: '#a855f7', // Purple
         img: 'assets/3D/model_u4.glb',
@@ -63,9 +74,13 @@ const UNITS = [
         name: 'Unknown 2',
         role: 'Art Director',
         stats: [
+            { label: 'Kalguksu', value: 15 },
+            { label: 'Sleep', value: 30 },
+            { label: 'Tech Art', value: 85 },
             { label: 'Animation', value: 95 },
-            { label: 'VFX', value: 70 },
-            { label: 'Sleep', value: 20 }
+            { label: 'VFX', value: 80 }
+            
+            
         ],
         color: '#f59e0b', // Amber
         img: 'assets/3D/model_u4.glb',
@@ -427,6 +442,11 @@ function onMouseUp(event) {
 }
 
 function handleSingleClick(event, rect) {
+    // Ignore clicks if they originated from the UI
+    if (event.target.closest('.dev-card') || event.target.closest('.dev-selection-bar') || event.target.closest('.devs-mobile-card')) {
+        return;
+    }
+
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 

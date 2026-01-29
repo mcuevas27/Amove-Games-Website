@@ -54,10 +54,12 @@ export function showDevCard(dataArray, focusPos, w, h) {
     const mobile = isMobile();
     const mapContainer = document.getElementById('devs-map-container');
     const mobileContainer = document.getElementById('devs-mobile-card');
+    
+    // Target appropriate container based on device
     const targetContainer = mobile ? mobileContainer : mapContainer;
-
-    // Remove empty state on mobile when showing a card
-    if (mobile && mobileContainer) {
+    
+    // Remove empty state when showing a card (mobile only)
+    if (mobileContainer) {
         const emptyState = mobileContainer.querySelector('.devs-mobile-card-empty');
         if (emptyState) emptyState.remove();
     }
@@ -78,9 +80,6 @@ export function showDevCard(dataArray, focusPos, w, h) {
         else document.body.appendChild(card);
     }
 
-    // Reset Position (only relevant for desktop)
-    card.classList.remove('alt-pos');
-
     // Multi-unit mode class
     if (units.length > 1) {
         card.classList.add('multi-select');
@@ -88,13 +87,10 @@ export function showDevCard(dataArray, focusPos, w, h) {
         card.classList.remove('multi-select');
     }
 
-    // Dynamic Positioning Logic (desktop only)
-    if (!mobile && focusPos && w && h) {
-        const isBottomLeft = focusPos.x < 380 && focusPos.y > (h - 400);
-        if (isBottomLeft) {
-            card.classList.add('alt-pos');
-        }
-    }
+    // Dynamic Positioning REMOVED - Always Bottom-Left
+    
+    // Apply Debug Layout Settings
+    updateCardLayout();
 
     // Build card content
     renderCardContent(card, units, 0);
@@ -125,12 +121,16 @@ function renderCardContent(card, units, viewIndex) {
     if (isMulti) {
         selectionBar = `
             <div class="dev-selection-bar">
-                <span class="selection-count">${units.length} SELECTED</span>
+                <div class="selection-header">
+                    <span class="sel-count">${units.length}</span>
+                    <span class="sel-label">Active</span>
+                </div>
                 <div class="selection-portraits">
                     ${units.map((u, i) => `
                         <div class="selection-portrait ${i === viewIndex ? 'active' : ''}"
                              data-index="${i}"
-                             style="border-color: ${u.color}; ${i === viewIndex ? `box-shadow: 0 0 10px ${u.color};` : ''}">
+                             title="${u.name}"
+                             style="border-color: ${u.color}; color: ${u.color}; ${i === viewIndex ? `background: ${u.color}22; box-shadow: 0 0 10px ${u.color}66;` : ''}">
                             ${getPortraitContent(u)}
                         </div>
                     `).join('')}
@@ -159,22 +159,19 @@ function renderCardContent(card, units, viewIndex) {
 
     card.innerHTML = `
         ${selectionBar}
-        <div class="dev-card-header">
+        <div class="dev-portrait-external">
             ${visualContent}
-            <div class="dev-header-text">
-                <h3 style="color: ${data.color}">${data.name}</h3>
-                <span class="dev-role">${data.role}</span>
-            </div>
         </div>
-        <div class="dev-stats">
-            ${data.stats.map(s => `
-                <div class="stat-row">
-                    <span class="stat-label">${s.label}</span>
-                    <div class="stat-bar-bg">
-                        <div class="stat-bar-fill" style="width: 0%"></div>
-                    </div>
+        <div class="dev-card-compact">
+            <div class="dev-compact-header">
+                <div class="dev-text">
+                    <h3 style="color: ${data.color}">${data.name}</h3>
+                    <span class="dev-role">${data.role}</span>
                 </div>
-            `).join('')}
+            </div>
+            <div class="radar-chart-container">
+                ${generateRadarChart(data.stats, data.color)}
+            </div>
         </div>
     `;
 
@@ -200,16 +197,117 @@ function renderCardContent(card, units, viewIndex) {
             if (mount) initMiniScene(mount, data.img);
         }, 10);
     }
-
-    // Animate Bars
-    setTimeout(() => {
-        const fills = card.querySelectorAll('.stat-bar-fill');
-        fills.forEach((fill, i) => {
-            fill.style.width = data.stats[i].value + '%';
-            fill.style.backgroundColor = data.color;
-        });
-    }, 50);
 }
+
+function generateRadarChart(stats, color) {
+    const numAxes = 5;
+    const radius = 80; // Increased radius
+    const centerX = 125; // SVG center X
+    const centerY = 100;  // SVG center Y
+    
+    // Pad stats to 5
+    const paddedStats = [...stats];
+    while (paddedStats.length < numAxes) {
+        paddedStats.push({ label: '', value: 0 });
+    }
+    
+    // Helper to get coordinates
+    const getCoords = (value, index) => {
+        const angle = (Math.PI * 2 * index) / numAxes - (Math.PI / 2); // Start at top
+        const r = (value / 100) * radius;
+        return {
+            x: centerX + Math.cos(angle) * r,
+            y: centerY + Math.sin(angle) * r
+        };
+    };
+
+    // Generate Polygon Points
+    const points = paddedStats.map((s, i) => {
+        const coords = getCoords(s.value, i);
+        return `${coords.x},${coords.y}`;
+    }).join(' ');
+
+    // Generate Background Axis (Pentagon)
+    const bgPoints = Array.from({ length: numAxes }).map((_, i) => {
+        const coords = getCoords(100, i);
+        return `${coords.x},${coords.y}`;
+    }).join(' ');
+    
+    // Generate Axis Lines
+    const axisLines = Array.from({ length: numAxes }).map((_, i) => {
+        const coords = getCoords(100, i);
+        return `<line x1="${centerX}" y1="${centerY}" x2="${coords.x}" y2="${coords.y}" class="radar-axis-line" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>`;
+    }).join('');
+
+    // Generate Interactive Points (instead of text labels)
+    const pointsAndTooltips = paddedStats.map((s, i) => {
+        if (!s.label) return '';
+        const coords = getCoords(s.value, i); // Put dot right on the value vertex
+        
+        return `
+            <circle cx="${coords.x}" cy="${coords.y}" r="5" class="radar-point" 
+                fill="${color}" stroke="#fff" stroke-width="1.5"
+                data-label="${s.label}" data-value="${Math.round(s.value)}">
+            </circle>
+        `;
+    }).join('');
+
+    return `
+        <svg viewBox="0 0 250 220" class="radar-chart-svg">
+            <!-- Background Pentagon -->
+            <polygon points="${bgPoints}" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+            ${axisLines}
+            
+            <!-- Data Polygon -->
+            <polygon points="${points}" fill="${color}" fill-opacity="0.3" stroke="${color}" stroke-width="2" class="radar-polygon"/>
+            
+            <!-- Interactive Points -->
+            ${pointsAndTooltips}
+        </svg>
+    `;
+}
+
+// Tooltip Management
+function initRadarTooltips() {
+    let tooltip = document.getElementById('dev-radar-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'dev-radar-tooltip';
+        tooltip.className = 'dev-radar-tooltip';
+        document.body.appendChild(tooltip);
+    }
+
+    document.addEventListener('mouseover', (e) => {
+        if (e.target.classList.contains('radar-point')) {
+            const label = e.target.getAttribute('data-label');
+            const value = e.target.getAttribute('data-value');
+            const color = e.target.getAttribute('fill');
+            
+            if (label) {
+                tooltip.innerHTML = `
+                    <div style="color: #aaa; font-size: 0.8em; text-transform: uppercase;">${label}</div>
+                    <div style="color: ${color}; font-size: 1.2em; font-weight: bold;">${value}</div>
+                `;
+                tooltip.style.display = 'block';
+                
+                // Position near the point, but global
+                const rect = e.target.getBoundingClientRect();
+                tooltip.style.left = `${rect.left + window.scrollX}px`;
+                tooltip.style.top = `${rect.top + window.scrollY - 40}px`; // Shift up
+                tooltip.style.transform = 'translateX(-50%)';
+            }
+        }
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        if (e.target.classList.contains('radar-point')) {
+            tooltip.style.display = 'none';
+        }
+    });
+}
+
+// Initialize tooltips once
+initRadarTooltips();
 
 function getPortraitContent(data) {
     if (data.img === '?') {
@@ -264,7 +362,10 @@ function showMobileEmptyState() {
 }
 
 // Initialize mobile empty state on load
+// Renamed for clarity - now used globally (Unified Layout)
+// Renamed for clarity - now used globally (Unified Layout)
 export function initMobileCardState() {
+    // Only show empty state on mobile
     if (isMobile()) {
         showMobileEmptyState();
     }
@@ -276,28 +377,18 @@ export function initMobileCardState() {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
             const card = document.getElementById('dev-unit-card');
-            const hasSelection = card && card.classList.contains('visible');
-            const mobile = isMobile();
-            const mapContainer = document.getElementById('devs-map-container');
             const mobileContainer = document.getElementById('devs-mobile-card');
 
-            // Move card to correct container if selection exists
-            if (hasSelection && card) {
-                const targetContainer = mobile ? mobileContainer : mapContainer;
-                if (card.parentElement !== targetContainer && targetContainer) {
-                    card.remove();
-                    targetContainer.appendChild(card);
-                }
+            // If card is gone or hidden, re-show empty state (Mobile Only)
+            if (isMobile() && !card && mobileContainer) {
+                 const emptyState = mobileContainer.querySelector('.devs-mobile-card-empty');
+                 if (!emptyState) showMobileEmptyState();
             }
-
-            if (mobile && !hasSelection) {
-                showMobileEmptyState();
-            } else if (!mobile) {
-                // Remove empty state on desktop
-                if (mobileContainer) {
-                    const emptyState = mobileContainer.querySelector('.devs-mobile-card-empty');
-                    if (emptyState) emptyState.remove();
-                }
+            
+            // Remove empty state if on desktop
+            if (!isMobile() && mobileContainer) {
+                const emptyState = mobileContainer.querySelector('.devs-mobile-card-empty');
+                if (emptyState) emptyState.remove();
             }
 
             // Update Mini 3D Scene if active
@@ -316,6 +407,8 @@ export function initMobileCardState() {
         }, 100);
     });
 }
+
+
 
 function cleanup3D() {
     if (miniReqId) {
@@ -402,7 +495,19 @@ let guiControllers = {
     scale: null,
     posY: null,
     rotY: null,
-    fov: null
+    scale: null,
+    posY: null,
+    rotY: null,
+    fov: null,
+    // Layout Controls
+    cardWidth: null,
+    cardHeight: null
+};
+
+// Layout Settings
+const layoutSettings = {
+    width: 300, // Default 300x200
+    height: 200
 };
 
 export function initDevCardGUI(gui) {
@@ -421,6 +526,22 @@ export function initDevCardGUI(gui) {
         }
     };
     folder.add(configExport, 'save').name('💾 Save Portraits');
+    folder.add(configExport, 'save').name('💾 Save Portraits');
+    
+    // Layout Debug Controls
+    const layoutFolder = gui.addFolder('Card Layout (Desktop)');
+    guiControllers.cardWidth = layoutFolder.add(layoutSettings, 'width', 200, 800).name('Width (px)').onChange(updateCardLayout);
+    guiControllers.cardHeight = layoutFolder.add(layoutSettings, 'height', 200, 800).name('Height (px)').onChange(updateCardLayout);
+}
+
+function updateCardLayout() {
+    const card = document.getElementById('dev-unit-card');
+    if (card && !isMobile()) {
+        card.style.width = `${layoutSettings.width}px`;
+        // card.style.height = `${layoutSettings.height}px`; // Let content dictate height mostly, or min-height
+        // Using min-height usually better to avoid overflow
+        card.style.minHeight = `${layoutSettings.height}px`;
+    }
 }
 
 function refreshGUIControllers() {

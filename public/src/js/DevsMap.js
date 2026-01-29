@@ -134,13 +134,13 @@ export function initDevsMap(containerId) {
     window.addEventListener('resize', onWindowResize);
 
     // Debug GUI
-    initGUI();
+    // initGUI();
 }
 
 function initGUI() {
     const gui = new GUI({ title: 'Devs Map Config' });
     initUnitGUI(gui);
-    initDevCardGUI(gui);
+    // initDevCardGUI(gui);
     
     const camFolder = gui.addFolder('Camera');
     camFolder.add(camera, 'zoom', 1, 100).name('Zoom').onChange(() => camera.updateProjectionMatrix());
