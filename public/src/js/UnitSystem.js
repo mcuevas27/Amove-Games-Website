@@ -74,6 +74,7 @@ const UNITS = [
 ];
 
 let unitGroup = new THREE.Group();
+let ringGroup = new THREE.Group(); // Independent group for rings
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 let cameraRef = null;
@@ -96,7 +97,10 @@ const hoverState = {
 export function initUnits(scene, camera, container) {
     cameraRef = camera;
     domRef = container;
+    cameraRef = camera;
+    domRef = container;
     scene.add(unitGroup);
+    scene.add(ringGroup); // Add rings to scene independently
 
     // Initialize discovery celebration effects
     initDiscoveryEffect(scene);
@@ -205,23 +209,26 @@ function createUnitMesh(data, tile, isLocked) {
         discovered: !isLocked
     };
 
-    // Selection Ring
-    const ringGeo = new THREE.RingGeometry(0.5, 0.65, 32); // Slightly thicker
+    // Selection Ring (Detached)
+    const ringGeo = new THREE.RingGeometry(0.5, 0.65, 32); 
     const ringMat = new THREE.MeshBasicMaterial({ 
         color: 0x00ffff, 
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.8,
-        depthWrite: false // Prevent z-fighting transparency issues
+        depthWrite: false 
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.y = -0.22; // Lift up: Unit=0.5, Ground=0.25. Target=0.28 => -0.22 relative
+    ring.position.set(tile.x, 0.28, tile.z); // Fixed height in world space
     ring.visible = false;
     ring.name = 'selectionRing';
-    ring.frustumCulled = false; // Prevent culling when animating far from parent origin
     
-    mesh.add(ring);
+    // Do NOT add to mesh. Add to independent group.
+    ringGroup.add(ring);
+    
+    // Store reference in userData for easy access
+    mesh.userData.selectionRing = ring;
 
     unitGroup.add(mesh);
 }
@@ -641,9 +648,11 @@ function selectUnits(units) {
             u.material.emissiveIntensity = 0;
         }
         
-        // Hide Ring
-        const ring = u.getObjectByName('selectionRing');
-        if (ring) ring.visible = false;
+        // Hide Ring (via reference)
+        const ring = u.userData.selectionRing;
+        if (ring) {
+            ring.visible = false;
+        }
     });
 
     hoverState.selectedUnits = units;
@@ -655,9 +664,11 @@ function selectUnits(units) {
                 u.material.emissiveIntensity = 0.8;
             }
             
-            // Show Ring
-            const ring = u.getObjectByName('selectionRing');
-            if (ring) ring.visible = true;
+            // Show Ring (via reference)
+            const ring = u.userData.selectionRing;
+            if (ring) {
+                ring.visible = true;
+            }
         });
 
         const rect = domRef.getBoundingClientRect();
@@ -709,14 +720,15 @@ export function updateUnits(time) {
         }
 
         // Animate Selection Ring
-        const ring = mesh.getObjectByName('selectionRing');
+        const ring = mesh.userData.selectionRing;
         if (ring) {
-             // Counter-animate Y to keep ring on ground
-             // Unit World Y = mesh.position.y
-             // Desired Ring World Y = mesh.userData.baseY - 0.22 (The fixed offset we set earlier)
-             // Ring Local Y = Desired World Y - Unit World Y
-             const desiredWorldY = mesh.userData.baseY - 0.22;
-             ring.position.y = desiredWorldY - mesh.position.y;
+             // Sync Position X/Z, Keep Y Fixed
+             ring.position.x = mesh.position.x;
+             ring.position.z = mesh.position.z;
+             ring.position.y = 0.28; // Fixed world height
+             
+             // Ensure flat rotation (reset if parent ever influenced it, though now independent)
+             ring.rotation.x = -Math.PI / 2; 
 
              if (ring.visible) {
                  ring.rotation.z -= 0.02; 
