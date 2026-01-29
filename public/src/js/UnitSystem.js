@@ -11,7 +11,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const UNITS = [
     {
         id: 'skacal',
-        name: 'Michael Skacal',
+        name: 'Skacal',
         role: 'Tech Director',
         stats: [
             { label: 'Roll Forward Tech', value: 95 },
@@ -19,14 +19,14 @@ const UNITS = [
             { label: 'Server', value: 90 },
             { label: 'Live Operations', value: 99 },
             { label: 'AYCE Sushi', value: 80 }
-           
+
         ],
         color: '#e11d48', // Red
         img: 'assets/3D/model_s3.glb'
     },
     {
         id: 'ramon',
-        name: 'Ramon Zarate',
+        name: 'Ramon',
         role: 'Principal Engineer',
         stats: [
             { label: 'Office Space', value: 15 },
@@ -34,7 +34,7 @@ const UNITS = [
             { label: 'Gameplay', value: 99 },
             { label: 'UNITY', value: 89 },
             { label: 'Pineapple Pizza', value: 65 }
-            
+
         ],
         color: '#22c55e', // Green
         img: 'assets/3D/model_r2.glb'
@@ -63,7 +63,7 @@ const UNITS = [
             { label: 'Pipeline', value: 60 },
             { label: 'Content Design', value: 50 },
             { label: '3D Art', value: 90 }
-           
+
         ],
         color: '#a855f7', // Purple
         img: 'assets/3D/model_g4.glb'
@@ -78,8 +78,8 @@ const UNITS = [
             { label: 'Tech Art', value: 85 },
             { label: 'Animation', value: 95 },
             { label: 'VFX', value: 80 }
-            
-            
+
+
         ],
         color: '#f59e0b', // Amber
         img: 'assets/3D/model_c5.glb'
@@ -104,8 +104,8 @@ let currentPos = { x: 0, y: 0 };
 // Animation State
 const hoverState = {
     hoveredUnit: null,
-    selectedUnits: [] 
-}; 
+    selectedUnits: []
+};
 
 export function initUnits(scene, camera, container) {
     cameraRef = camera;
@@ -149,15 +149,15 @@ function spawnUnits() {
         const db = b.x * b.x + b.z * b.z;
         return da - db;
     });
-    
+
     const startTile = landTiles[0];
-    
+
     // Cluster Logic
     const neighbors = landTiles.sort((a, b) => {
-        const da = (a.x - startTile.x)**2 + (a.z - startTile.z)**2;
-        const db = (b.x - startTile.x)**2 + (b.z - startTile.z)**2;
+        const da = (a.x - startTile.x) ** 2 + (a.z - startTile.z) ** 2;
+        const db = (b.x - startTile.x) ** 2 + (b.z - startTile.z) ** 2;
         return da - db;
-    }); 
+    });
 
     UNITS.forEach((data, i) => {
         if (i < neighbors.length) {
@@ -167,23 +167,23 @@ function spawnUnits() {
 }
 
 function createUnitMesh(data, tile) {
-    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); 
-    const material = new THREE.MeshStandardMaterial({ 
+    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+    const material = new THREE.MeshStandardMaterial({
         color: data.color,
         roughness: 0.3,
         metalness: 0.5,
         emissive: 0x000000,
         emissiveIntensity: 0
     });
-    
+
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(tile.x, 0.5, tile.z); 
+    mesh.position.set(tile.x, 0.5, tile.z);
 
     // Generic 3D Model Loading
     if (data.img.endsWith('.glb')) {
         loadCustomModel(mesh, data.img, data.id);
     }
-    
+
     // Metadata
     mesh.userData = {
         isUnit: true,
@@ -192,29 +192,29 @@ function createUnitMesh(data, tile) {
         data: data,
         baseY: 0.5,
         // Path State
-        currentPath: [], 
+        currentPath: [],
         targetPos: null,
         isMoving: false
     };
 
     // Selection Ring (Detached)
-    const ringGeo = new THREE.RingGeometry(0.5, 0.65, 32); 
-    const ringMat = new THREE.MeshBasicMaterial({ 
-        color: 0x00ffff, 
+    const ringGeo = new THREE.RingGeometry(0.5, 0.65, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
         side: THREE.DoubleSide,
         transparent: true,
         opacity: 0.8,
-        depthWrite: false 
+        depthWrite: false
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(tile.x, 0.28, tile.z); // Fixed height in world space
     ring.visible = false;
     ring.name = 'selectionRing';
-    
+
     // Do NOT add to mesh. Add to independent group.
     ringGroup.add(ring);
-    
+
     // Store reference in userData for easy access
     mesh.userData.selectionRing = ring;
 
@@ -245,13 +245,13 @@ function onTouchStart(event) {
         isLongPress = true;
         isDragging = false; // Cancel drag check
         selectionBox.style.display = 'none'; // Hide box if it appeared
-        
+
         // Trigger Move Command
         attemptMoveCommand(touch.clientX, touch.clientY);
-        
+
         // Haptic feedback if available
         if (navigator.vibrate) navigator.vibrate(50);
-        
+
     }, LONG_PRESS_DURATION);
 
     // Don't show selection box immediately
@@ -260,7 +260,7 @@ function onTouchStart(event) {
 
 function onTouchMove(event) {
     if (event.touches.length !== 1) return;
-    
+
     // If moved significantly, cancel long press
     const touch = event.touches[0];
     const rect = domRef.getBoundingClientRect();
@@ -271,26 +271,26 @@ function onTouchMove(event) {
 
     if (dist > 10) {
         clearTimeout(longPressTimer); // Cancel Move Command trigger
-        
+
         if (!isLongPress) {
-             // Only process drag if we haven't already triggered long press
-             if (isDragging) {
-                 // ... existing drag logic ...
-                 selectionBox.style.display = 'block';
-                 selectionBox.style.zIndex = '99999';
-                 selectionBox.style.backgroundColor = 'rgba(0, 255, 255, 0.2)';
-                 selectionBox.style.border = '1px solid #00ffff';
+            // Only process drag if we haven't already triggered long press
+            if (isDragging) {
+                // ... existing drag logic ...
+                selectionBox.style.display = 'block';
+                selectionBox.style.zIndex = '99999';
+                selectionBox.style.backgroundColor = 'rgba(0, 255, 255, 0.2)';
+                selectionBox.style.border = '1px solid #00ffff';
 
-                 const width = Math.abs(currentX - startPos.x);
-                 const height = Math.abs(currentY - startPos.y);
-                 const left = Math.min(currentX, startPos.x);
-                 const top = Math.min(currentY, startPos.y);
+                const width = Math.abs(currentX - startPos.x);
+                const height = Math.abs(currentY - startPos.y);
+                const left = Math.min(currentX, startPos.x);
+                const top = Math.min(currentY, startPos.y);
 
-                 selectionBox.style.width = width + 'px';
-                 selectionBox.style.height = height + 'px';
-                 selectionBox.style.left = left + 'px';
-                 selectionBox.style.top = top + 'px';
-             }
+                selectionBox.style.width = width + 'px';
+                selectionBox.style.height = height + 'px';
+                selectionBox.style.left = left + 'px';
+                selectionBox.style.top = top + 'px';
+            }
         }
     }
 }
@@ -299,7 +299,7 @@ function onTouchEnd(event) {
     if (event.cancelable) event.preventDefault(); // Prevent ghost mouse events (click/mouseup)
 
     clearTimeout(longPressTimer);
-    
+
     if (isLongPress) {
         // Was a long press, verify it's done? Already handled in timer.
         // Just reset and return.
@@ -378,7 +378,7 @@ function onMouseMove(event) {
         const rect = domRef.getBoundingClientRect();
         const currentX = event.clientX - rect.left;
         const currentY = event.clientY - rect.top;
-        
+
         const width = Math.abs(currentX - startPos.x);
         const height = Math.abs(currentY - startPos.y);
         const left = Math.min(currentX, startPos.x);
@@ -395,13 +395,13 @@ function onMouseUp(event) {
     if (!isDragging) return;
     isDragging = false;
     selectionBox.style.display = 'none';
-    
+
     const rect = domRef.getBoundingClientRect();
     const endX = event.clientX - rect.left;
     const endY = event.clientY - rect.top;
 
-    const dist = Math.sqrt((endX - startPos.x)**2 + (endY - startPos.y)**2);
-    
+    const dist = Math.sqrt((endX - startPos.x) ** 2 + (endY - startPos.y) ** 2);
+
     if (dist < 5) {
         handleSingleClick(event, rect);
     } else {
@@ -423,14 +423,14 @@ function handleSingleClick(event, rect) {
 
     if (intersects.length > 0) {
         let hitObj = intersects[0].object;
-        
-        while(hitObj) {
+
+        while (hitObj) {
             if (hitObj.userData && hitObj.userData.isUnit) {
                 selectUnits([hitObj]);
                 return;
             }
             hitObj = hitObj.parent;
-            if (hitObj === unitGroup || hitObj === null) break; 
+            if (hitObj === unitGroup || hitObj === null) break;
         }
         selectUnits([]);
     } else {
@@ -441,10 +441,10 @@ function handleSingleClick(event, rect) {
 function toScreenPosition(obj, camera, width, height) {
     const vector = new THREE.Vector3();
     obj.getWorldPosition(vector);
-    vector.project(camera); 
+    vector.project(camera);
 
     const x = (vector.x * 0.5 + 0.5) * width;
-    const y = (-(vector.y) * 0.5 + 0.5) * height; 
+    const y = (-(vector.y) * 0.5 + 0.5) * height;
 
     return { x, y };
 }
@@ -460,8 +460,8 @@ function handleBoxSelect(x1, y1, x2, y2, width, height) {
     unitGroup.children.forEach(unit => {
 
         const screenPos = toScreenPosition(unit, cameraRef, width, height);
-        
-        if (screenPos.x >= minX && screenPos.x <= maxX && 
+
+        if (screenPos.x >= minX && screenPos.x <= maxX &&
             screenPos.y >= minY && screenPos.y <= maxY) {
             gathered.push(unit);
         }
@@ -552,9 +552,9 @@ function moveGroup(units, targetTile, targetIndex) {
     // Formation Logic: Scatter around target
     const nearest = tileList
         .filter(t => t.type !== 'WATER')
-        .sort((a,b) => {
-            const da = (a.x - targetTile.x)**2 + (a.z - targetTile.z)**2;
-            const db = (b.x - targetTile.x)**2 + (b.z - targetTile.z)**2;
+        .sort((a, b) => {
+            const da = (a.x - targetTile.x) ** 2 + (a.z - targetTile.z) ** 2;
+            const db = (b.x - targetTile.x) ** 2 + (b.z - targetTile.z) ** 2;
             return da - db;
         })
         .slice(0, units.length);
@@ -563,7 +563,7 @@ function moveGroup(units, targetTile, targetIndex) {
         if (nearest[i]) {
             setPathForUnit(unit, nearest[i]);
         } else {
-            setPathForUnit(unit, targetTile); 
+            setPathForUnit(unit, targetTile);
         }
     });
 }
@@ -573,9 +573,9 @@ function getCurrentTile(unit) {
     // ...
     let closest = null;
     let minD = Infinity;
-    
+
     tileList.forEach(t => {
-        const d = (t.x - unit.position.x)**2 + (t.z - unit.position.z)**2;
+        const d = (t.x - unit.position.x) ** 2 + (t.z - unit.position.z) ** 2;
         if (d < minD) {
             minD = d;
             closest = t;
@@ -595,11 +595,11 @@ function setPathForUnit(unit, endTile) {
     console.log(`Pathing Unit ${unit.userData.id} from ${startTile.id} to ${endTile.id}`);
     const path = findPath(startTile, endTile);
     console.log("Path found:", path.length);
-    
+
     if (path.length > 0) {
         unit.userData.currentPath = path;
         unit.userData.isMoving = true;
-        
+
         // Start moving to first node
         setNextPathNode(unit);
     } else {
@@ -616,7 +616,7 @@ function setNextPathNode(unit) {
 
     const nextTile = unit.userData.currentPath.shift();
     const endPos = new THREE.Vector3(nextTile.x, unit.userData.baseY, nextTile.z);
-    
+
     unit.userData.targetPos = endPos;
 }
 
@@ -624,11 +624,11 @@ function selectUnits(units) {
     // Reset previous selection
     hoverState.selectedUnits.forEach(u => {
 
-        if(u.material.emissive) {
+        if (u.material.emissive) {
             u.material.emissive.setHex(0x000000);
             u.material.emissiveIntensity = 0;
         }
-        
+
         // Hide Ring (via reference)
         const ring = u.userData.selectionRing;
         if (ring) {
@@ -641,10 +641,10 @@ function selectUnits(units) {
     if (units.length > 0) {
         units.forEach(u => {
 
-            if(u.material.emissive) {
+            if (u.material.emissive) {
                 u.material.emissiveIntensity = 0.8;
             }
-            
+
             // Show Ring (via reference)
             const ring = u.userData.selectionRing;
             if (ring) {
@@ -667,7 +667,7 @@ function selectUnits(units) {
 let rotationSpeed = 0.1;
 
 export function updateUnits(time) {
-    const speed = 5.0 * 0.016; 
+    const speed = 5.0 * 0.016;
 
     unitGroup.children.forEach((mesh, i) => {
         if (!mesh.userData.baseY) return;
@@ -675,7 +675,7 @@ export function updateUnits(time) {
         // Path Movement Logic
         if (mesh.userData.isMoving && mesh.userData.targetPos) {
             const dist = mesh.position.distanceTo(mesh.userData.targetPos);
-            
+
             if (dist < 0.1) {
                 // Reached Node
                 mesh.position.copy(mesh.userData.targetPos);
@@ -684,16 +684,16 @@ export function updateUnits(time) {
             } else {
                 const dir = new THREE.Vector3().subVectors(mesh.userData.targetPos, mesh.position).normalize();
                 mesh.position.add(dir.multiplyScalar(speed));
-                
+
                 // Smooth Rotation (Slerp)
                 const targetPos = new THREE.Vector3(mesh.userData.targetPos.x, mesh.position.y, mesh.userData.targetPos.z);
                 const dummy = new THREE.Object3D();
                 dummy.position.copy(mesh.position);
                 dummy.lookAt(targetPos);
-                
+
                 mesh.quaternion.slerp(dummy.quaternion, rotationSpeed);
             }
-        } 
+        }
         else {
             // Idle bobbing only when stationary
             // Idle bobbing only when stationary
@@ -703,19 +703,19 @@ export function updateUnits(time) {
         // Animate Selection Ring
         const ring = mesh.userData.selectionRing;
         if (ring) {
-             // Sync Position X/Z, Keep Y Fixed
-             ring.position.x = mesh.position.x;
-             ring.position.z = mesh.position.z;
-             ring.position.y = 0.28; // Fixed world height
-             
-             // Ensure flat rotation (reset if parent ever influenced it, though now independent)
-             ring.rotation.x = -Math.PI / 2; 
+            // Sync Position X/Z, Keep Y Fixed
+            ring.position.x = mesh.position.x;
+            ring.position.z = mesh.position.z;
+            ring.position.y = 0.28; // Fixed world height
 
-             if (ring.visible) {
-                 ring.rotation.z -= 0.02; 
-                 const pulse = 0.8 + Math.sin(time * 5) * 0.2;
-                 ring.material.opacity = pulse;
-             }
+            // Ensure flat rotation (reset if parent ever influenced it, though now independent)
+            ring.rotation.x = -Math.PI / 2;
+
+            if (ring.visible) {
+                ring.rotation.z -= 0.02;
+                const pulse = 0.8 + Math.sin(time * 5) * 0.2;
+                ring.material.opacity = pulse;
+            }
         }
 
 
@@ -727,17 +727,17 @@ function loadCustomModel(parentMesh, modelPath, unitId) {
     const loader = new GLTFLoader();
     loader.load(modelPath, (gltf) => {
         const model = gltf.scene;
-        
+
         // Default Scale/Pos Adjustments (Global for now)
         // Ideally these would be in the UNIT data config per model
-        model.scale.set(1.4, 1.4, 1.4); 
-        model.position.y = 0.58; 
-        
+        model.scale.set(1.4, 1.4, 1.4);
+        model.position.y = 0.58;
+
         parentMesh.geometry.dispose();
         // parentMesh.material.dispose(); 
-        
+
         parentMesh.add(model);
-        
+
         // Make the box invisible but keep it for raycasting/selection
         parentMesh.material = new THREE.MeshBasicMaterial({ visible: false, opacity: 0, transparent: true });
 
@@ -746,13 +746,13 @@ function loadCustomModel(parentMesh, modelPath, unitId) {
         // If we want the GUI to control "currently selected unit", we'd need to update logic.
         // For now, let's just assign skacalMesh if it IS Skacal so the existing GUI works.
         if (unitId === 'skacal') {
-            skacalMesh = model; 
+            skacalMesh = model;
         }
 
         console.log(`Custom Model Loaded: ${modelPath}`);
 
         model.traverse(c => {
-            if(c.isMesh) {
+            if (c.isMesh) {
                 c.castShadow = true;
                 c.receiveShadow = true;
             }
@@ -765,7 +765,7 @@ function loadCustomModel(parentMesh, modelPath, unitId) {
 
 export function initUnitGUI(gui) {
     const folder = gui.addFolder('Unit Settings');
-    
+
     const params = {
         skacalScale: 1.4,
         skacalElevation: 0.58,
