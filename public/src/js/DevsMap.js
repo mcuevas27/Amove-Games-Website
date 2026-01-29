@@ -9,7 +9,7 @@ import { initHexGrid, updateGrid } from './HexGrid.js';
 import { initUnits, updateUnits, initUnitGUI } from './UnitSystem.js';
 import { initDevCardGUI } from './DevCardUI.js';
 import { initFog, updateFog } from './FogSystem.js';
-import { updateDiscoveryEffects } from './DiscoveryEffect.js';
+
 
 let scene, camera, renderer, composer, controls;
 let animationId = null;
@@ -197,7 +197,7 @@ function animate() {
     updateGrid(time);
     updateFog(time);
     updateUnits(time);
-    updateDiscoveryEffects(0.016); // ~60fps delta
+
 
     composer.render();
 }

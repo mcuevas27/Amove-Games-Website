@@ -903,6 +903,23 @@ body::after {
     margin: 0;
 }
 
+/* Custom Radar Tooltip */
+.dev-radar-tooltip {
+    position: absolute;
+    background: rgba(10, 15, 25, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 12px;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 2000;
+    font-family: 'Share Tech Mono', monospace;
+    display: none;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
+    text-align: center;
+    white-space: nowrap;
+}
+
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
     .section-devs {
@@ -961,23 +978,6 @@ body::after {
         width: 100%;
         text-align: left;
     }
-    
-    /* Custom Radar Tooltip */
-.dev-radar-tooltip {
-    position: absolute;
-    background: rgba(10, 15, 25, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 8px 12px;
-    border-radius: 6px;
-    pointer-events: none;
-    z-index: 2000;
-    font-family: 'Share Tech Mono', monospace;
-    display: none;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-    backdrop-filter: blur(5px);
-    text-align: center;
-    white-space: nowrap;
-}
 
     .devs-mobile-card .stat-item {
         justify-content: space-between;

@@ -2,7 +2,7 @@ import { tileList, tilesMap, getGridMesh } from './HexGrid.js';
 import { registerFogUnits } from './FogSystem.js';
 import { showDevCard, hideDevCard, initDevCardGUI, initMobileCardState } from './DevCardUI.js';
 import { findPath, findClosestLand } from './Pathfinder.js';
-import { initDiscoveryEffect, triggerDiscovery } from './DiscoveryEffect.js';
+
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -54,8 +54,8 @@ const UNITS = [
         img: 'assets/3D/model_d1.glb'
     },
     {
-        id: 'unknown_1',
-        name: 'Unknown 1',
+        id: 'gavin',
+        name: 'Gavin',
         role: 'Principal 3D Artist',
         stats: [
             { label: 'Writing', value: 70 },
@@ -66,8 +66,7 @@ const UNITS = [
            
         ],
         color: '#a855f7', // Purple
-        img: 'assets/3D/model_u4.glb',
-        hidden: true
+        img: 'assets/3D/model_g4.glb'
     },
     {
         id: 'cuevas',
@@ -116,8 +115,7 @@ export function initUnits(scene, camera, container) {
     scene.add(unitGroup);
     scene.add(ringGroup); // Add rings to scene independently
 
-    // Initialize discovery celebration effects
-    initDiscoveryEffect(scene);
+
 
     // Create Selection Box
     selectionBox = document.createElement('div');
@@ -154,41 +152,21 @@ function spawnUnits() {
     
     const startTile = landTiles[0];
     
-    // Cluster Logic for Known Units
+    // Cluster Logic
     const neighbors = landTiles.sort((a, b) => {
         const da = (a.x - startTile.x)**2 + (a.z - startTile.z)**2;
         const db = (b.x - startTile.x)**2 + (b.z - startTile.z)**2;
         return da - db;
-    }); // We need full list for random picking later
+    }); 
 
-    const knownUnits = UNITS.filter(u => !u.hidden);
-    const unknownUnits = UNITS.filter(u => u.hidden);
-
-    // Spawn Known Units (Clusters)
-    knownUnits.forEach((data, i) => {
+    UNITS.forEach((data, i) => {
         if (i < neighbors.length) {
-            createUnitMesh(data, neighbors[i], false);
-        }
-    });
-
-    // Spawn Unknown Units (Random Far)
-    const farTiles = neighbors.filter(t => {
-        const dist = Math.sqrt((t.x - startTile.x)**2 + (t.z - startTile.z)**2);
-        return dist > 15; // Minimum distance
-    });
-
-    unknownUnits.forEach(data => {
-        if (farTiles.length > 0) {
-            const randIndex = Math.floor(Math.random() * farTiles.length);
-            const tile = farTiles.splice(randIndex, 1)[0]; // Pick and remove to avoid overlap
-            createUnitMesh(data, tile, true);
-        } else {
-            console.warn("Not enough far tiles for hidden unit:", data.name);
+            createUnitMesh(data, neighbors[i]);
         }
     });
 }
 
-function createUnitMesh(data, tile, isLocked) {
+function createUnitMesh(data, tile) {
     const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6); 
     const material = new THREE.MeshStandardMaterial({ 
         color: data.color,
@@ -200,7 +178,6 @@ function createUnitMesh(data, tile, isLocked) {
     
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(tile.x, 0.5, tile.z); 
-    mesh.visible = !isLocked; // Hide if locked 
 
     // Generic 3D Model Loading
     if (data.img.endsWith('.glb')) {
@@ -217,10 +194,7 @@ function createUnitMesh(data, tile, isLocked) {
         // Path State
         currentPath: [], 
         targetPos: null,
-        isMoving: false,
-        // Discovery State
-        locked: isLocked, // True for unknown units
-        discovered: !isLocked
+        isMoving: false
     };
 
     // Selection Ring (Detached)
@@ -364,11 +338,6 @@ function handleTouchTap(touch, rect) {
 
         while (hitObj) {
             if (hitObj.userData && hitObj.userData.isUnit) {
-                if (hitObj.userData.locked) {
-                    console.log("Unit is locked/undiscovered.");
-                    return;
-                }
-
                 selectUnits([hitObj]);
                 return;
             }
@@ -457,12 +426,6 @@ function handleSingleClick(event, rect) {
         
         while(hitObj) {
             if (hitObj.userData && hitObj.userData.isUnit) {
-                // LOCK CHECK
-                if (hitObj.userData.locked) {
-                    console.log("Unit is locked/undiscovered.");
-                    return;
-                }
-
                 selectUnits([hitObj]);
                 return;
             }
@@ -495,7 +458,6 @@ function handleBoxSelect(x1, y1, x2, y2, width, height) {
     const gathered = [];
 
     unitGroup.children.forEach(unit => {
-        if (unit.userData.locked) return; // Skip locked units
 
         const screenPos = toScreenPosition(unit, cameraRef, width, height);
         
@@ -661,7 +623,7 @@ function setNextPathNode(unit) {
 function selectUnits(units) {
     // Reset previous selection
     hoverState.selectedUnits.forEach(u => {
-        u.scale.set(1, 1, 1);
+
         if(u.material.emissive) {
             u.material.emissive.setHex(0x000000);
             u.material.emissiveIntensity = 0;
@@ -678,7 +640,7 @@ function selectUnits(units) {
 
     if (units.length > 0) {
         units.forEach(u => {
-            u.scale.set(1.2, 1.2, 1.2);
+
             if(u.material.emissive) {
                 u.material.emissiveIntensity = 0.8;
             }
@@ -758,30 +720,6 @@ export function updateUnits(time) {
 
 
 
-        // Discovery Logic
-        if (!mesh.userData.locked) {
-            // This is an active unit, check if it's close to any locked units
-            unitGroup.children.forEach(other => {
-                if (other.userData && other.userData.locked) {
-                    const d = mesh.position.distanceTo(other.position);
-                    if (d < 3) {
-                        // UNLOCK!
-                        other.userData.locked = false;
-                        other.userData.discovered = true;
-
-                        // Reveal Visuals
-                        other.visible = true;
-
-                        console.log(`Discovered: ${other.userData.data.name}`);
-
-                        // RPG-style celebration effect!
-                        triggerDiscovery(other.position, other.userData.data.color);
-
-                        other.position.y += 1.0; // Jump up
-                    }
-                }
-            });
-        }
     });
 }
 

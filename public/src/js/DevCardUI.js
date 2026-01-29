@@ -496,18 +496,13 @@ const unitConfigs = {
         rotY: 0.5277,
         fov: 19
     },
-    'unknown_1': {
+    'gavin': {
         scale: 1,
         posY: -0.02,
         rotY: 0.5277,
         fov: 20
     },
-    'unknown_2': {
-        scale: 1,
-        posY: -0.02,
-        rotY: 0.5277,
-        fov: 20
-    },
+
     'cuevas': {
         scale: 1,
         posY: -0.02,
