@@ -296,6 +296,20 @@ export function initMobileCardState() {
                     if (emptyState) emptyState.remove();
                 }
             }
+
+            // Update Mini 3D Scene if active
+            if (miniRenderer && miniCamera && card) {
+                const mount = document.getElementById('dev-card-3d-mount');
+                if (mount) {
+                    const w = mount.clientWidth;
+                    const h = mount.clientHeight;
+                    if (w > 0 && h > 0) {
+                         miniRenderer.setSize(w, h);
+                         miniCamera.aspect = w / h;
+                         miniCamera.updateProjectionMatrix();
+                    }
+                }
+            }
         }, 100);
     });
 }
@@ -462,6 +476,7 @@ function initMiniScene(container, modelPath) {
     miniCamera.position.set(0, 0.5, 3);
 
     miniRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    miniRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Fix for high-DPI (Pixel, iPhone)
     miniRenderer.setSize(w, h);
     miniRenderer.outputColorSpace = THREE.SRGBColorSpace;
 
