@@ -75,6 +75,7 @@ const simFragmentShader = `
 const mapFragmentShader = `
     varying vec2 vUv;
     uniform float uTime;
+    uniform float uScrollY; // New Uniform for Parallax
     uniform float uScale;
     uniform float uStrokeWidth;
     uniform float uGap;
@@ -112,6 +113,9 @@ const mapFragmentShader = `
     void main() {
         vec2 uv = vUv;
         uv.x *= uResolution.x / uResolution.y;
+
+        // Apply Parallax Translation
+        uv.y += uScrollY;
         
         // Scale
         uv *= uScale;
@@ -357,6 +361,7 @@ export function initBackgroundScene(containerId) {
     // --- MAIN SCENE ---
     const mainUniforms = {
         uTime: { value: 0 },
+        uScrollY: { value: 0 },
         uResolution: { value: new THREE.Vector2(canvasSize.w, canvasSize.h) },
         uScale: { value: settings.scale }, // Initial tile size
         uStrokeWidth: { value: settings.strokeWidth },
@@ -498,10 +503,11 @@ export function initBackgroundScene(containerId) {
         // --- STEP 2: RENDER MAIN SCENE ---
         // renderer.setRenderTarget(null); // Screen -> Removed, composer renders to screen now
         
-        // Parallax
+        // Shader-based Parallax
         const scrollY = window.scrollY;
-        const parallaxOffset = scrollY * -0.3; 
-        canvasContainer.style.transform = `translateY(${parallaxOffset}px)`;
+        // Normalize scroll relative to screen height or arbitrary scale factor
+        // 0.0005 is a magic number to control speed. Adjust to taste.
+        mainUniforms.uScrollY.value = scrollY * -0.001; 
         
         settings.scrollY = Math.round(scrollY);
 

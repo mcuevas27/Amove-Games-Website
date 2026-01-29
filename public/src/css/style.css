@@ -33,7 +33,7 @@ html {
   top: 0;
   left: 0;
   width: 100vw;
-  height: 150vh; /* Extra height to prevent cutoff during parallax scroll */
+  height: 100vh; /* Fixed height, parallax is now shader-based */
   z-index: -1;
   pointer-events: auto; /* Allow mouse interaction for the brush */
 }
