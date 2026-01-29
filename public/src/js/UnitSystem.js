@@ -209,9 +209,13 @@ function createUnitMesh(data, tile, isLocked) {
 }
 
 // --- TOUCH HANDLERS (Mobile) --- //
+let longPressTimer = null;
+let isLongPress = false;
+const LONG_PRESS_DURATION = 600; // ms
+
 function onTouchStart(event) {
     if (event.touches.length !== 1) return;
-    event.preventDefault();
+    // event.preventDefault(); // Allow scrolling if not acting? No, game map usually needs default prevented.
 
     const touch = event.touches[0];
     const rect = domRef.getBoundingClientRect();
@@ -219,14 +223,32 @@ function onTouchStart(event) {
     startPos.x = touch.clientX - rect.left;
     startPos.y = touch.clientY - rect.top;
 
-    // Don't show selection box immediately on touch (wait to see if it's a tap)
+    // Reset Long Press
+    isLongPress = false;
+    clearTimeout(longPressTimer);
+
+    // Start Long Press Timer
+    longPressTimer = setTimeout(() => {
+        isLongPress = true;
+        isDragging = false; // Cancel drag check
+        selectionBox.style.display = 'none'; // Hide box if it appeared
+        
+        // Trigger Move Command
+        attemptMoveCommand(touch.clientX, touch.clientY);
+        
+        // Haptic feedback if available
+        if (navigator.vibrate) navigator.vibrate(50);
+        
+    }, LONG_PRESS_DURATION);
+
+    // Don't show selection box immediately
     selectionBox.style.display = 'none';
 }
 
 function onTouchMove(event) {
-    if (!isDragging || event.touches.length !== 1) return;
-    event.preventDefault();
-
+    if (event.touches.length !== 1) return;
+    
+    // If moved significantly, cancel long press
     const touch = event.touches[0];
     const rect = domRef.getBoundingClientRect();
     const currentX = touch.clientX - rect.left;
@@ -234,33 +256,48 @@ function onTouchMove(event) {
 
     const dist = Math.sqrt((currentX - startPos.x) ** 2 + (currentY - startPos.y) ** 2);
 
-    // Only show selection box if dragging beyond threshold
     if (dist > 10) {
-        selectionBox.style.display = 'block';
-        selectionBox.style.zIndex = '99999';
-        selectionBox.style.backgroundColor = 'rgba(0, 255, 255, 0.2)';
-        selectionBox.style.border = '1px solid #00ffff';
+        clearTimeout(longPressTimer); // Cancel Move Command trigger
+        
+        if (!isLongPress) {
+             // Only process drag if we haven't already triggered long press
+             if (isDragging) {
+                 // ... existing drag logic ...
+                 selectionBox.style.display = 'block';
+                 selectionBox.style.zIndex = '99999';
+                 selectionBox.style.backgroundColor = 'rgba(0, 255, 255, 0.2)';
+                 selectionBox.style.border = '1px solid #00ffff';
 
-        const width = Math.abs(currentX - startPos.x);
-        const height = Math.abs(currentY - startPos.y);
-        const left = Math.min(currentX, startPos.x);
-        const top = Math.min(currentY, startPos.y);
+                 const width = Math.abs(currentX - startPos.x);
+                 const height = Math.abs(currentY - startPos.y);
+                 const left = Math.min(currentX, startPos.x);
+                 const top = Math.min(currentY, startPos.y);
 
-        selectionBox.style.width = width + 'px';
-        selectionBox.style.height = height + 'px';
-        selectionBox.style.left = left + 'px';
-        selectionBox.style.top = top + 'px';
+                 selectionBox.style.width = width + 'px';
+                 selectionBox.style.height = height + 'px';
+                 selectionBox.style.left = left + 'px';
+                 selectionBox.style.top = top + 'px';
+             }
+        }
     }
 }
 
 function onTouchEnd(event) {
+    clearTimeout(longPressTimer);
+    
+    if (isLongPress) {
+        // Was a long press, verify it's done? Already handled in timer.
+        // Just reset and return.
+        isLongPress = false;
+        isDragging = false;
+        return;
+    }
+
     if (!isDragging) return;
     isDragging = false;
     selectionBox.style.display = 'none';
 
     const rect = domRef.getBoundingClientRect();
-
-    // Use changedTouches for the touch that ended
     const touch = event.changedTouches[0];
     const endX = touch.clientX - rect.left;
     const endY = touch.clientY - rect.top;
@@ -268,10 +305,8 @@ function onTouchEnd(event) {
     const dist = Math.sqrt((endX - startPos.x) ** 2 + (endY - startPos.y) ** 2);
 
     if (dist < 10) {
-        // Tap - treat as single click
         handleTouchTap(touch, rect);
     } else {
-        // Drag - box select
         handleBoxSelect(startPos.x, startPos.y, endX, endY, rect.width, rect.height);
     }
 }
@@ -430,14 +465,13 @@ function handleBoxSelect(x1, y1, x2, y2, width, height) {
 }
 
 
-function onRightClick(event) {
-    event.preventDefault();
-
+// Shared Move Command Logic (used by Right Click and Long Press)
+function attemptMoveCommand(clientX, clientY) {
     if (hoverState.selectedUnits.length === 0) return;
 
     const rect = domRef.getBoundingClientRect();
-    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     raycaster.setFromCamera(mouse, cameraRef);
 
@@ -459,9 +493,7 @@ function onRightClick(event) {
                 const nearest = findClosestLand(targetTile);
                 if (nearest) {
                     targetTile = nearest;
-                    console.log("Found nearest land:", targetTile.id);
                 } else {
-                    console.error("No valid land found near water.");
                     return; // No valid land found
                 }
             }
@@ -470,9 +502,14 @@ function onRightClick(event) {
             moveGroup(hoverState.selectedUnits, targetTile, instanceId);
 
             // Spawn A-Move marker at click position
-            spawnAMoveMarker(event.clientX, event.clientY);
+            spawnAMoveMarker(clientX, clientY);
         }
     }
+}
+
+function onRightClick(event) {
+    event.preventDefault();
+    attemptMoveCommand(event.clientX, event.clientY);
 }
 
 // A-Move marker animation - RTS-style move command feedback

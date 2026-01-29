@@ -24,9 +24,9 @@ const SETTINGS = {
         zoom: 1.188 // User adjusted zoom
     },
     lighting: {
-        ambientIntensity: 0.4,
+        ambientIntensity: 1.0,
         dirLightPos: [10, 20, 10],
-        dirLightIntensity: 1.5
+        dirLightIntensity: 2.0
     }
 };
 

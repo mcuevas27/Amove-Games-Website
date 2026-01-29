@@ -20,6 +20,7 @@ body {
 html {
     scroll-behavior: smooth;
     transform: none !important;
+    overflow-x: hidden;
 }
 
 /* Debug GUI - hidden for previews */
@@ -598,6 +599,27 @@ body::after {
 @media (max-width: 768px) {
     .ethos-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .main-nav {
+        padding: 1rem 0;
+    }
+
+    .main-nav ul {
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .main-nav a {
+        font-size: 0.9rem;
+        padding: 0.3rem 0.5rem;
+    }
+
+    .section-marionette h2,
+    .section-devs h2,
+    .section-goals h2 {
+        font-size: 10vw; /* Scale with viewport */
+        letter-spacing: 4px; /* Reduce spacing */
     }
 }
 
