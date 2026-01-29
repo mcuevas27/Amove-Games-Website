@@ -48,10 +48,10 @@ const UNITS = [
     {
         id: 'unknown_1',
         name: 'Unknown 1',
-        role: 'Princple 3D Artist',
+        role: 'Principal 3D Artist',
         stats: [
-            { label: 'Environments', value: 100 },
-            { label: 'Story Development', value: 90 },
+            { label: 'World Building', value: 100 },
+            { label: 'Story', value: 90 },
             { label: 'CUDA Cores', value: 5 }
         ],
         color: '#a855f7', // Purple
