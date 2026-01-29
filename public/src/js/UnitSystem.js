@@ -709,10 +709,19 @@ export function updateUnits(time) {
 
         // Animate Selection Ring
         const ring = mesh.getObjectByName('selectionRing');
-        if (ring && ring.visible) {
-             ring.rotation.z -= 0.02; // Spin locally
-             const pulse = 0.8 + Math.sin(time * 5) * 0.2;
-             ring.material.opacity = pulse;
+        if (ring) {
+             // Counter-animate Y to keep ring on ground
+             // Unit World Y = mesh.position.y
+             // Desired Ring World Y = mesh.userData.baseY - 0.22 (The fixed offset we set earlier)
+             // Ring Local Y = Desired World Y - Unit World Y
+             const desiredWorldY = mesh.userData.baseY - 0.22;
+             ring.position.y = desiredWorldY - mesh.position.y;
+
+             if (ring.visible) {
+                 ring.rotation.z -= 0.02; 
+                 const pulse = 0.8 + Math.sin(time * 5) * 0.2;
+                 ring.material.opacity = pulse;
+             }
         }
 
 
