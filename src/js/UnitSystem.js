@@ -19,11 +19,11 @@ const UNITS = [
             { label: 'AYCE Sushi', value: 80 }
         ],
         color: '#e11d48', // Red
-        img: 'assets/3D/Skacal.glb'
+        img: 'assets/3D/model_s3.glb'
     },
     {
         id: 'ramon',
-        name: 'Ramon Zarate', // Assuming Ramon is the Lead/Gameplay eng based on context or just mapping him here
+        name: 'Ramon Zarate',
         role: 'Principal Engineer',
         stats: [
             { label: 'Canadian', value: 85 },
@@ -31,7 +31,7 @@ const UNITS = [
             { label: 'Office Space', value: 15 }
         ],
         color: '#22c55e', // Green
-        img: 'assets/3D/Ramon.glb'
+        img: 'assets/3D/model_r2.glb'
     },
     {
         id: 'david',
@@ -43,7 +43,7 @@ const UNITS = [
             { label: 'Politics', value: 2 }
         ],
         color: '#3b82f6', // Blue
-        img: 'assets/3D/David.glb'
+        img: 'assets/3D/model_d1.glb'
     },
     {
         id: 'unknown_1',
@@ -55,7 +55,7 @@ const UNITS = [
             { label: 'CUDA Cores', value: 5 }
         ],
         color: '#a855f7', // Purple
-        img: 'assets/3D/unknown.glb',
+        img: 'assets/3D/model_u4.glb',
         hidden: true
     },
     {
@@ -68,7 +68,7 @@ const UNITS = [
             { label: 'Sleep', value: 20 }
         ],
         color: '#f59e0b', // Amber
-        img: 'assets/3D/unknown.glb',
+        img: 'assets/3D/model_u4.glb',
         hidden: true
     }
 ];
@@ -537,12 +537,7 @@ export function updateUnits(time) {
             mesh.position.y = mesh.userData.baseY + Math.sin(time * 2 + i) * 0.1;
         }
 
-        // Spin if selected - REMOVED per user request
-        // if (hoverState.selectedUnits.includes(mesh)) {
-        //     mesh.rotation.y += 0.02;
-        // } else {
-        //      mesh.rotation.y *= 0.9;
-        // }
+
 
         // Discovery Logic
         if (!mesh.userData.locked) {

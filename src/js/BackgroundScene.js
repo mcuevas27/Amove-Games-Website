@@ -1,0 +1,511 @@
+
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+// --- SHADERS INLINED ---
+const mapVertexShader = `
+    varying vec2 vUv;
+    varying vec2 vPos;
+    
+    void main() {
+        vUv = uv;
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vPos = worldPosition.xy;
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+`;
+
+// --- SIMULATION SHADER (Ping Pong) ---
+// Handles the persistent "Mask" layer
+const simVertexShader = `
+    varying vec2 vUv;
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+`;
+
+const simFragmentShader = `
+    varying vec2 vUv;
+    uniform sampler2D uTexture;
+    uniform vec2 uMouse;
+    uniform float uResolutionRatio; // Aspect Ratio Correction
+    uniform float uCursorRadius;
+    uniform float uDecay;
+    uniform float uTime;
+    
+    void main() {
+        // Sample previous frame
+        vec4 prev = texture2D(uTexture, vUv);
+        
+        // Decay
+        float value = prev.r * uDecay;
+        
+        // Brush (Mouse Interaction)
+        // Correct for Aspect Ratio in distance calc
+        vec2 aspectUV = vUv;
+        aspectUV.x *= uResolutionRatio;
+        
+        vec2 aspectMouse = uMouse;
+        aspectMouse.x *= uResolutionRatio;
+        
+        // Distance to brush
+        float d = distance(aspectUV, aspectMouse);
+        
+        // Draw new 'paint'
+        // uCursorRadius is in grid units in the main shader.
+        // We'll approximate: 0.05 is a decent size in UV space relative to radius.
+        float brush = 1.0 - smoothstep(0.0, uCursorRadius * 0.005, d); 
+        
+        // Add brush to value
+        value = max(value, brush);
+        
+        // Clamp
+        value = clamp(value, 0.0, 1.0);
+        
+        gl_FragColor = vec4(value, 0.0, 0.0, 1.0);
+    }
+`;
+
+// --- HEXAGON PATTERN SHADER ---
+// Based on standard hex grid math
+const mapFragmentShader = `
+    varying vec2 vUv;
+    uniform float uTime;
+    uniform float uScale;
+    uniform float uStrokeWidth;
+    uniform float uGap;
+    uniform vec2 uResolution;
+    
+    // Pulse Uniforms
+    uniform float uPulseSpeed;
+    uniform float uPulseDensity; // 0.0 to 1.0 (roughly)
+    uniform vec3 uPulseColor;
+    
+    // Stroke Colors
+    uniform vec3 uStrokeColor1;
+    uniform vec3 uStrokeColor2;
+    uniform vec3 uStrokeColor3;
+    
+    // Interaction Texture (from Sim)
+    uniform sampler2D uMask;
+
+    // Pseudo-random hash
+    float hash21(vec2 p) {
+        p = fract(p * vec2(234.34, 435.345));
+        p += dot(p, p + 34.23);
+        return fract(p.x * p.y);
+    }
+
+    // Hexagon distance function
+    float hexDist(vec2 p) {
+        p = abs(p);
+        // The dot product with (1, sqrt(3)) is the distance to the slanted edge
+        float c = dot(p, normalize(vec2(1.0, 1.7320508)));
+        // The max of that and the horizontal distance (p.x) gives the hex shape
+        return max(c, p.x);
+    }
+
+    void main() {
+        vec2 uv = vUv;
+        uv.x *= uResolution.x / uResolution.y;
+        
+        // Scale
+        uv *= uScale;
+        
+        // --- ROBUST HEX TILING ---
+        // Based on "The Art of Code" / IQ method for robust IDs
+        // 1. Skew the UVs
+        vec2 r = vec2(1.0, 1.7320508);
+        vec2 h = r * 0.5;
+        
+        vec2 a = mod(uv, r) - h;
+        vec2 b = mod(uv - h, r) - h;
+        
+        vec2 gv;
+        // Add epsilon to avoid flickering at exact tie
+        if (dot(a, a) < dot(b, b) + 1e-4)
+            gv = a; 
+        else
+            gv = b; 
+        
+        // Robust ID calculation using skewed coordinates
+        // We convert back to skewed grid to find integer ID
+        // Transformation matrix to skewed grid:
+        // x' = x/1.0 - y/(sqrt(3)) * (1/sqrt(3)?)  -- wait, let's use the proven "floor" method directly if we want new logic.
+        // Actually, the artifact is likely 'id' jitter.
+        // Let's recalculate ID from the center 'gv' which is stable relative to uv.
+        // id = uv - gv is correct... UNLESS uv is large and float precision loss happens. 
+        // With uScale=20 it should be fine.
+        
+        // Alternative hypothesis: The "Horizontal/Vertical lines" are typically from fract or mod boundaries.
+        // Let's force ID to be integer-based to align perfectly.
+        
+        vec2 id = uv - gv; 
+        
+        // Round ID to nearest "hex grid integer coordinate" to snap it perfectly
+        // For now, let's trust the 'gv' logic but fix the hash.
+        
+        // --- FIX: Recalculate ID based on integer grid logic to avoid float jitter ---
+        // Skew constants
+        const float s3 = 1.7320508;
+        vec2 s = vec2(1, s3);
+        
+        // Convert to skewed grid
+        vec2 skewed = uv * vec2(1.0, 1.0/s3);
+        vec2 rectID = floor(skewed);
+        
+        // Logic to select the specific hex ID from likely candidates is complex.
+        // Simpler fix: Snap 'id' to a grid.
+        // The centers are at multiples of r.x and r.y/2.
+        // Let's define ID simply as the center position.
+        // id = floor(id * 10.0 + 0.5) / 10.0; // Snap to 0.1 precision? No.
+        
+        // THE REAL FIX:
+        // Artifacts "alternate horizontal and vertical". This is characteristic of hash21 inputting floating point numbers that have tiny errors.
+        // We MUST pass stable integers to hash21.
+        
+        // Convert center position (id) to stable sortable integers.
+        // Grid: X spacing 1.0, Y spacing sqrt(3).
+        // Rows are offset.
+        
+        vec2 gridId;
+        // Manually implement round() for GLSL 1.0 compatibility: floor(x + 0.5)
+        gridId.y = floor(id.y / (s3 * 0.5) + 0.5); // Row index (integer)
+        
+        // X is offset by 0.5 on odd rows
+        float rowOffset = mod(gridId.y, 2.0) * 0.5;
+        gridId.x = floor(id.x - rowOffset + 0.5); // Col index
+        
+        // Use this integer grid ID for noise!
+        vec2 noiseInput = gridId; 
+        
+        // --- RESTORE INTERACTION LOGIC ---
+        // Read Interaction Mask from Texture
+        float maskVal = texture2D(uMask, vUv).r;
+        float interact = smoothstep(0.01, 1.0, maskVal); 
+        
+        float dist = hexDist(gv);
+        
+        float radius = 0.5;
+        float outer = radius - uGap;
+        float inner = outer - uStrokeWidth;
+
+        // Stable AA based on resolution (no fwidth artifacts)
+        float aa = uScale / uResolution.y * 1.5; 
+        
+        // Stroke mask
+        float stroke = smoothstep(inner - aa, inner + aa, dist) - smoothstep(outer - aa, outer + aa, dist);
+        
+        // --- PULSE EFFECT ---
+        // USE ROBUST NOISE INPUT
+        float noise = hash21(noiseInput); 
+        
+        // Generate a sine wave based on time and random offset
+        // Range -1 to 1
+        float rawPulse = sin(uTime * uPulseSpeed + noise * 100.0);
+        
+        // Thresholding to make it sparse
+        // We want it to be 0 most of the time, and spike to 1
+        // Map [-1, 1] to roughly [0, 1] but skewed
+        
+        float threshold = 1.0 - uPulseDensity; // e.g. density 0.1 -> threshold 0.9
+        // If rawPulse > threshold, we light up
+        float pulse = smoothstep(threshold, 1.0, rawPulse);
+        
+        // INTERACTION: Only pulse if mask is active
+        pulse *= interact;
+        
+        // Fill mask (inner part of hex)
+        float fill = 1.0 - smoothstep(inner - aa, inner + aa, dist);
+        
+        // Select Random Stroke Color
+        // We reuse the noise/hash logic
+        // Partition noise [0,1] into 3 buckets
+        vec3 strokeColor = uStrokeColor1;
+        if(noise > 0.33) strokeColor = uStrokeColor2;
+        if(noise > 0.66) strokeColor = uStrokeColor3;
+        
+        // INTERACTION: Glow stroke in masked area
+        strokeColor += uPulseColor * interact * 2.0;
+        
+        vec3 finalColor = vec3(0.0);
+        
+        // Add stroke
+        finalColor = mix(finalColor, strokeColor, stroke);
+        
+        // Add pulse (mixing into fill)
+        // mix existing color with pulse color based on pulse factor * fill mask
+        finalColor = mix(finalColor, uPulseColor, pulse * fill);
+        
+        gl_FragColor = vec4(finalColor, 1.0);
+    }
+`;
+
+export function initBackgroundScene(containerId) {
+    // Scene Setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const renderer = new THREE.WebGLRenderer({ alpha: true });
+    
+    const getCanvasSize = () => ({
+        w: window.innerWidth,
+        h: window.innerHeight * 1.5
+    });
+    let canvasSize = getCanvasSize();
+    
+    renderer.setSize(canvasSize.w, canvasSize.h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+    document.getElementById(containerId).appendChild(renderer.domElement);
+    
+    // --- SETTINGS (Defaults) ---
+    const settings = {
+        // Scroll tracking
+        scrollY: 0,
+        scrollPercent: 0,
+        // Hex Pattern Defaults
+        scale: 43.985,
+        strokeWidth: 0.006766,
+        gap: 0.01,
+        // Pulse Defaults
+        pulseSpeed: 7.78,
+        pulseDensity: 0.428,
+        pulseColor: { r: 0.12156862745098039, g: 0, b: 0.09803921568627451 }, 
+        // Stroke Defaults
+        strokeColor1: { r: 0.1, g: 0.1, b: 0.18 }, 
+        strokeColor2: { r: 0.08, g: 0.13, b: 0.24 }, 
+        strokeColor3: { r: 0.06, g: 0.2, b: 0.37 }, 
+        
+        // Interaction
+        cursorRadius: 20.0,
+        decay: 0.96, // Decay
+        
+        export: function() {
+            const config = {
+                typography: {
+                    scanThickness: settings.scanThickness,
+                    scanGap: settings.scanGap,
+                    titleGlow: settings.titleGlow
+                },
+                hexPattern: {
+                    scale: settings.scale,
+                    strokeWidth: settings.strokeWidth,
+                    gap: settings.gap
+                },
+                pulse: {
+                    speed: settings.pulseSpeed,
+                    density: settings.pulseDensity,
+                    color: settings.pulseColor
+                },
+                strokeColors: {
+                    c1: settings.strokeColor1,
+                    c2: settings.strokeColor2,
+                    c3: settings.strokeColor3
+                },
+                interaction: {
+                    radius: settings.cursorRadius,
+                    decay: settings.decay
+                }
+            };
+            const json = JSON.stringify(config, null, 2);
+            console.log("--- SAVED CONFIG ---");
+            console.log(json);
+            alert("Settings exported to Console (F12)!");
+        },
+        // Typography State
+        scanThickness: 7.254,
+        scanGap: 0,
+        titleGlow: 6.5,
+        devsGlow: 4
+    };
+
+    // --- PING PONG BUFFERS ---
+    const simRes = 512; 
+    const simParams = {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        format: THREE.RGBAFormat,
+        type: THREE.FloatType 
+    };
+    let simBufferA = new THREE.WebGLRenderTarget(simRes, simRes, simParams);
+    let simBufferB = new THREE.WebGLRenderTarget(simRes, simRes, simParams);
+    
+    const simScene = new THREE.Scene();
+    const simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    
+    const simUniforms = {
+        uTexture: { value: null },
+        uMouse: { value: new THREE.Vector2(0, 0) },
+        uResolutionRatio: { value: canvasSize.w / canvasSize.h },
+        uCursorRadius: { value: settings.cursorRadius },
+        uDecay: { value: settings.decay },
+        uTime: { value: 0 }
+    };
+    
+    const simMaterial = new THREE.ShaderMaterial({
+        uniforms: simUniforms,
+        vertexShader: simVertexShader,
+        fragmentShader: simFragmentShader
+    });
+    
+    const simQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), simMaterial);
+    simScene.add(simQuad);
+
+    // --- MAIN SCENE ---
+    const mainUniforms = {
+        uTime: { value: 0 },
+        uResolution: { value: new THREE.Vector2(canvasSize.w, canvasSize.h) },
+        uScale: { value: settings.scale }, // Initial tile size
+        uStrokeWidth: { value: settings.strokeWidth },
+        uGap: { value: settings.gap },
+        // Pulse defaults
+        uPulseSpeed: { value: settings.pulseSpeed },
+        uPulseDensity: { value: settings.pulseDensity }, 
+        uPulseColor: { value: new THREE.Color(settings.pulseColor.r, settings.pulseColor.g, settings.pulseColor.b) },
+        // Stroke defaults - Dark variations
+        uStrokeColor1: { value: new THREE.Color(settings.strokeColor1.r, settings.strokeColor1.g, settings.strokeColor1.b) },
+        uStrokeColor2: { value: new THREE.Color(settings.strokeColor2.r, settings.strokeColor2.g, settings.strokeColor2.b) },
+        uStrokeColor3: { value: new THREE.Color(settings.strokeColor3.r, settings.strokeColor3.g, settings.strokeColor3.b) },
+        // Mask from Sim
+        uMask: { value: null } 
+    };
+
+    const mapGroup = new THREE.Group();
+    scene.add(mapGroup);
+
+    const mapGeo = new THREE.PlaneGeometry(2, 2);
+    const mapMat = new THREE.ShaderMaterial({
+        uniforms: mainUniforms,
+        vertexShader: mapVertexShader,
+        fragmentShader: mapFragmentShader
+    });
+    const mapPlane = new THREE.Mesh(mapGeo, mapMat);
+    mapGroup.add(mapPlane);
+
+    const canvasContainer = document.getElementById(containerId);
+
+    document.addEventListener('mousemove', (e) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Normalize to 0-1, y flipped for UV
+        const u = x / rect.width;
+        const v = 1.0 - (y / rect.height);
+        
+        simUniforms.uMouse.value.set(u, v);
+    });
+
+    window.addEventListener('resize', () => {
+            canvasSize = getCanvasSize();
+            renderer.setSize(canvasSize.w, canvasSize.h);
+            composer.setSize(canvasSize.w, canvasSize.h);
+            
+            // Update shader uniforms
+            mainUniforms.uResolution.value.set(canvasSize.w, canvasSize.h);
+            simUniforms.uResolutionRatio.value = canvasSize.w / canvasSize.h;
+    });
+
+    const clock = new THREE.Clock();
+
+    const composer = new EffectComposer(renderer);
+    
+    const mapPass = new RenderPass(scene, camera);
+    composer.addPass(mapPass);
+
+    const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight), 
+        1.5,   // Strength
+        0.1,  // Radius
+        0.3    // Threshold
+    );
+    composer.addPass(bloomPass);
+
+    const gui = new GUI({ title: 'A-Move Debug', closed: true, load: false });
+    gui.close();
+
+    function updateCSS(varName, value, unit='px') {
+        document.documentElement.style.setProperty(varName, value + unit);
+    }
+
+    const fTypo = gui.addFolder('Typography');
+    fTypo.add(settings, 'scanThickness', 1, 10).name('Scan Thickness').onChange(v => updateCSS('--scan-thickness', v));
+    fTypo.add(settings, 'scanGap', 0, 10).name('Scan Gap').onChange(v => updateCSS('--scan-gap', v));
+    fTypo.add(settings, 'titleGlow', 0, 50).name('Title Glow').onChange(v => updateCSS('--title-glow', v));
+    fTypo.add(settings, 'devsGlow', 0, 100).name('Devs Glow').onChange(v => {
+        updateCSS('--devs-glow-1', v);
+        updateCSS('--devs-glow-2', v * 2);
+        updateCSS('--devs-glow-3', v * 3);
+    });
+    
+    const fHex = gui.addFolder('Hex Background');
+    fHex.add(settings, 'scale', 5.0, 100.0).name('Tile Scale').onChange(v => mainUniforms.uScale.value = v);
+    fHex.add(settings, 'strokeWidth', 0.001, 0.2).name('Stroke Width').onChange(v => mainUniforms.uStrokeWidth.value = v);
+    fHex.add(settings, 'gap', 0.0, 0.2).name('Tile Gap').onChange(v => mainUniforms.uGap.value = v);
+    
+    const fStroke = fHex.addFolder('Stroke Colors');
+    fStroke.addColor(settings, 'strokeColor1').name('Color 1').onChange(v => mainUniforms.uStrokeColor1.value.setRGB(v.r, v.g, v.b));
+    fStroke.addColor(settings, 'strokeColor2').name('Color 2').onChange(v => mainUniforms.uStrokeColor2.value.setRGB(v.r, v.g, v.b));
+    fStroke.addColor(settings, 'strokeColor3').name('Color 3').onChange(v => mainUniforms.uStrokeColor3.value.setRGB(v.r, v.g, v.b));
+    
+    const fPulse = fHex.addFolder('Pulse Effect');
+    fPulse.add(settings, 'pulseSpeed', 0.0, 10.0).name('Speed').onChange(v => mainUniforms.uPulseSpeed.value = v);
+    fPulse.add(settings, 'pulseDensity', 0.0, 0.5).name('Density').onChange(v => mainUniforms.uPulseDensity.value = v);
+    fPulse.addColor(settings, 'pulseColor').name('Color').onChange(v => {
+        mainUniforms.uPulseColor.value.setRGB(v.r, v.g, v.b);
+    });
+    
+    const fInteract = fHex.addFolder('Interaction');
+    fInteract.add(settings, 'cursorRadius', 1.0, 20.0).name('Radius').onChange(v => simUniforms.uCursorRadius.value = v);
+    fInteract.add(settings, 'decay', 0.8, 0.999).name('Trail Persistence').onChange(v => simUniforms.uDecay.value = v);
+    
+    fHex.open();
+    
+    const fBloom = gui.addFolder('Bloom');
+    fBloom.add(bloomPass, 'strength', 0.0, 5.0).name('Strength');
+    fBloom.add(bloomPass, 'radius', 0.0, 1.0).name('Radius');
+    fBloom.add(bloomPass, 'threshold', 0.0, 1.0).name('Threshold');
+    
+    const fScroll = gui.addFolder('Scroll Info');
+    
+    gui.add(settings, 'export').name('💾 EXPORT SETTINGS');
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = clock.getDelta();
+        mainUniforms.uTime.value = clock.getElapsedTime();
+        
+        // --- STEP 1: RENDER SIMULATION ---
+        // Sim Buffer Swap
+        const bufferRead = simBufferA;
+        const bufferWrite = simBufferB;
+        
+        simUniforms.uTexture.value = bufferRead.texture;
+        
+        renderer.setRenderTarget(bufferWrite);
+        renderer.render(simScene, simCamera);
+        
+        // Pass the new texture to the main shader
+        mainUniforms.uMask.value = bufferWrite.texture;
+        
+        // Swap Buffers for next frame
+        simBufferA = bufferWrite;
+        simBufferB = bufferRead;
+        
+        // --- STEP 2: RENDER MAIN SCENE ---
+        // renderer.setRenderTarget(null); // Screen -> Removed, composer renders to screen now
+        
+        // Parallax
+        const scrollY = window.scrollY;
+        const parallaxOffset = scrollY * -0.3; 
+        canvasContainer.style.transform = `translateY(${parallaxOffset}px)`;
+        
+        settings.scrollY = Math.round(scrollY);
+
+        composer.render();
+    }
+    animate();
+}
