@@ -206,16 +206,17 @@ function createUnitMesh(data, tile, isLocked) {
     };
 
     // Selection Ring
-    const ringGeo = new THREE.RingGeometry(0.5, 0.6, 32);
+    const ringGeo = new THREE.RingGeometry(0.5, 0.65, 32); // Slightly thicker
     const ringMat = new THREE.MeshBasicMaterial({ 
         color: 0x00ffff, 
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
+        depthWrite: false // Prevent z-fighting transparency issues
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = -Math.PI / 2;
-    ring.position.y = -0.45; // Just above ground relative to unit center (which is at 0.5)
+    ring.position.y = -0.22; // Lift up: Unit=0.5, Ground=0.25. Target=0.28 => -0.22 relative
     ring.visible = false;
     ring.name = 'selectionRing';
     
