@@ -274,47 +274,63 @@ function generateRadarChart(stats, color) {
 
 // Initialize tooltips once (Lazy init)
 let tooltipsInitialized = false;
+let radarTooltip = null; // Module-level reference
 
 function initRadarTooltips() {
     if (tooltipsInitialized) return;
     
-    let tooltip = document.getElementById('dev-radar-tooltip');
-    if (!tooltip) {
-        tooltip = document.createElement('div');
-        tooltip.id = 'dev-radar-tooltip';
-        tooltip.className = 'dev-radar-tooltip';
-        document.body.appendChild(tooltip);
+    // Ensure tooltip exists
+    radarTooltip = document.getElementById('dev-radar-tooltip');
+    if (!radarTooltip) {
+        radarTooltip = document.createElement('div');
+        radarTooltip.id = 'dev-radar-tooltip';
+        radarTooltip.className = 'dev-radar-tooltip';
+        document.body.appendChild(radarTooltip);
     }
 
+    // Mouse Over - Show
     document.addEventListener('mouseover', (e) => {
-        if (e.target.classList.contains('radar-point')) {
+        // Handle SVG element matching
+        if (e.target.matches && e.target.matches('.radar-point')) {
             const label = e.target.getAttribute('data-label');
             const value = e.target.getAttribute('data-value');
             const color = e.target.getAttribute('fill');
             
             if (label) {
-                tooltip.innerHTML = `
+                radarTooltip.innerHTML = `
                     <div style="color: #aaa; font-size: 0.8em; text-transform: uppercase;">${label}</div>
                     <div style="color: ${color}; font-size: 1.2em; font-weight: bold;">${value}</div>
                 `;
-                tooltip.style.display = 'block';
-                
-                // Position near the point
-                const rect = e.target.getBoundingClientRect();
-                tooltip.style.left = `${rect.left + window.scrollX}px`;
-                tooltip.style.top = `${rect.top + window.scrollY - 40}px`; // Shift up
-                tooltip.style.transform = 'translateX(-50%)';
+                radarTooltip.style.display = 'block';
+                updateTooltipPosition(e);
             }
         }
     });
 
+    // Mouse Move - Update Position (Smoother)
+    document.addEventListener('mousemove', (e) => {
+        if (radarTooltip.style.display === 'block') {
+           // Optional: check if still over target? 
+           // For now, simpler to just let mouseout handle hide
+        }
+    });
+
+    // Mouse Out - Hide
     document.addEventListener('mouseout', (e) => {
-        if (e.target.classList.contains('radar-point')) {
-            tooltip.style.display = 'none';
+        if (e.target.matches && e.target.matches('.radar-point')) {
+            radarTooltip.style.display = 'none';
         }
     });
     
     tooltipsInitialized = true;
+}
+
+function updateTooltipPosition(e) {
+    if (!radarTooltip) return;
+    const rect = e.target.getBoundingClientRect();
+    radarTooltip.style.left = `${rect.left + window.scrollX}px`;
+    radarTooltip.style.top = `${rect.top + window.scrollY - 50}px`; // Moved up slightly more
+    radarTooltip.style.transform = 'translateX(-50%)';
 }
 
 function getPortraitContent(data) {
