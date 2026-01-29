@@ -22,9 +22,9 @@ html {
     transform: none !important;
 }
 
-/* Debug GUI - above navigation */
+/* Debug GUI - hidden for previews */
 .lil-gui {
-    z-index: 10001 !important;
+    display: none !important;
 }
 
 /* Fixed Background Canvas */
