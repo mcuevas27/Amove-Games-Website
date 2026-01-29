@@ -777,17 +777,19 @@ body::after {
     width: 100%;
     height: 100%;
     overflow: visible; /* Allow labels to bleed slightly */
+    pointer-events: visiblePainted;
 }
 
 /* Radar Points */
 .radar-point {
     cursor: pointer;
+    pointer-events: all; /* Force capture */
     transition: r 0.2s ease, stroke-width 0.2s ease;
 }
 
 .radar-point:hover {
-    r: 6;
-    stroke-width: 2;
+    r: 8; /* Make it bigger to be obvious */
+    stroke-width: 3;
 }
 
 .dev-card.multi-select .dev-stats {
