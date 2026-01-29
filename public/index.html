@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>A-Move Games | Protocol</title>
-    <link rel="stylesheet" href="../src/css/style.css?v=4">
+    <link rel="stylesheet" href="src/css/style.css?v=4">
     <script type="importmap">
         {
             "imports": {
@@ -49,7 +49,7 @@
             <div id="devs-map-container" class="devs-map-container"></div>
             
             <script type="module">
-                import { initDevsMap } from '../src/js/DevsMap.js';
+                import { initDevsMap } from './src/js/DevsMap.js';
                 // Trigger init when DOM is ready
                 window.addEventListener('load', () => {
                     initDevsMap('devs-map-container');
@@ -110,7 +110,7 @@
     </main>
 
     <script type="module">
-        import { initBackgroundScene } from '../src/js/BackgroundScene.js';
+        import { initBackgroundScene } from './src/js/BackgroundScene.js';
         
         // Start the background effect
         initBackgroundScene('canvas-container');
