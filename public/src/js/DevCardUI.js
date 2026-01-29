@@ -14,7 +14,10 @@ function isMobile() {
 let cardContainer = null;
 let currentTimeout = null;
 // 3D Scene State
-let miniScene, miniCamera, miniRenderer, miniReqId;
+let miniScene, miniCamera, miniReqId;
+let miniRenderer = null; // Singleton renderer
+const modelCache = new Map(); // Cache for GLTF models
+
 let currentLoadId = 0;
 
 // Multi-unit selection state
@@ -319,10 +322,10 @@ function cleanup3D() {
         cancelAnimationFrame(miniReqId);
         miniReqId = null;
     }
-    if (miniRenderer) {
-        miniRenderer.dispose();
-        miniRenderer.domElement.remove();
-        miniRenderer = null;
+    
+    // Do NOT dispose renderer, just detach
+    if (miniRenderer && miniRenderer.domElement && miniRenderer.domElement.parentElement) {
+        miniRenderer.domElement.parentElement.removeChild(miniRenderer.domElement);
     }
 
     // Remove document-level event listeners
@@ -475,10 +478,14 @@ function initMiniScene(container, modelPath) {
     miniCamera = new THREE.PerspectiveCamera(portraitSettings.fov, w / h, 0.1, 100);
     miniCamera.position.set(0, 0.5, 3);
 
-    miniRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    miniRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Fix for high-DPI (Pixel, iPhone)
-    miniRenderer.setSize(w, h);
-    miniRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Initialize Singleton Renderer if needed
+    if (!miniRenderer) {
+        miniRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        miniRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Fix for high-DPI
+        miniRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    }
+    
+    miniRenderer.setSize(w, h); // Resize to current container
 
     // Lighting
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
@@ -544,15 +551,26 @@ function initMiniScene(container, modelPath) {
     container.style.cursor = 'grab';
 
     const thisLoadId = currentLoadId; // Capture ID
-    console.log(`DevCard 3D: Loading ${modelPath} (LoadID: ${thisLoadId})`);
+    
+    // Check Cache
+    if (modelCache.has(modelPath)) {
+        console.log(`DevCard 3D: Using cached model for ${modelPath}`);
+        setupModel(modelCache.get(modelPath).clone(), thisLoadId);
+    } else {
+        console.log(`DevCard 3D: Loading ${modelPath} (LoadID: ${thisLoadId})`);
+        loader.load(modelPath, (gltf) => {
+            if (thisLoadId !== currentLoadId) return; // Stale
 
-    loader.load(modelPath, (gltf) => {
-        if (thisLoadId !== currentLoadId) {
-            console.log(`DevCard: Stale load ignored (This: ${thisLoadId}, Current: ${currentLoadId})`);
-            return;
-        }
-
-        const model = gltf.scene;
+            // Cache it
+            modelCache.set(modelPath, gltf.scene);
+            
+            // Use clone
+            setupModel(gltf.scene.clone(), thisLoadId);
+        }, undefined, (err) => console.error(err));
+    }
+    
+    function setupModel(model, loadId) {
+        if (loadId !== currentLoadId) return;
 
         // Initial set based on current settings
         model.scale.set(portraitSettings.scale, portraitSettings.scale, portraitSettings.scale);
@@ -560,9 +578,8 @@ function initMiniScene(container, modelPath) {
         model.rotation.y = portraitSettings.rotY;
 
         miniScene.add(model);
-        console.log("DevCard 3D Model Loaded");
-
-    }, undefined, (err) => console.error(err));
+        console.log("DevCard 3D Model Added");
+    }
 
     container.appendChild(miniRenderer.domElement);
     const animate = () => {
