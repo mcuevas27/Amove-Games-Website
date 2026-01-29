@@ -32,8 +32,8 @@
     <nav class="main-nav">
         <ul>
             <li><a href="#hero">HOME</a></li>
-            <li><a href="#devs">DEVS</a></li>
             <li><a href="#goals">GOALS</a></li>
+            <li><a href="#devs">DEVS</a></li>
             <li><a href="#contact">CONTACT</a></li>
         </ul>
     </nav>
@@ -54,22 +54,6 @@
             </div>
         </section>
         <!-- maybe no robots, definitely crabs -->
-
-        <section id="devs" class="section-devs">
-            <h2 class="text-scanline title-cyan">DEVS</h2>
-            <!-- Map Container -->
-            <div id="devs-map-container" class="devs-map-container"></div>
-            <!-- Mobile External Card Panel -->
-            <div id="devs-mobile-card" class="devs-mobile-card"></div>
-
-            <script type="module">
-                import { initDevsMap } from './src/js/DevsMap.js';
-                // Trigger init when DOM is ready
-                window.addEventListener('load', () => {
-                    initDevsMap('devs-map-container');
-                });
-            </script>
-        </section>
 
         <section id="goals" class="section-goals">
             <h2 class="text-scanline title-orange">ETHOS</h2>
@@ -110,6 +94,22 @@
                     <p class="ethos-desc">Team emphasis on collective achievement over individual goals.</p>
                 </div>
             </div>
+        </section>
+
+        <section id="devs" class="section-devs">
+            <h2 class="text-scanline title-cyan">DEVS</h2>
+            <!-- Map Container -->
+            <div id="devs-map-container" class="devs-map-container"></div>
+            <!-- Mobile External Card Panel -->
+            <div id="devs-mobile-card" class="devs-mobile-card"></div>
+
+            <script type="module">
+                import { initDevsMap } from './src/js/DevsMap.js';
+                // Trigger init when DOM is ready
+                window.addEventListener('load', () => {
+                    initDevsMap('devs-map-container');
+                });
+            </script>
         </section>
 
         <section id="contact" class="section-contact">
