@@ -283,6 +283,8 @@ function onTouchMove(event) {
 }
 
 function onTouchEnd(event) {
+    if (event.cancelable) event.preventDefault(); // Prevent ghost mouse events (click/mouseup)
+
     clearTimeout(longPressTimer);
     
     if (isLongPress) {
