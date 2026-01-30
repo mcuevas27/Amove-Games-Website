@@ -267,6 +267,16 @@ body::after {
 @keyframes dotFade { 0% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } }
 @keyframes converge { 0% { opacity: 0; margin-top: -15px; } 30% { opacity: 1; } 100% { opacity: 0; margin-top: 5px; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0px) scale(0.3); } }
 
+/* --- SELECTION BOX --- */
+.selection-box {
+    position: absolute;
+    pointer-events: none;
+    z-index: 9999;
+    /* Background and border are set dynamically via JS, but defaults are good practice */
+    background: rgba(0, 255, 255, 0.2);
+    border: 1px solid #00ffff;
+}
+
 /* --- UNIT TOOLTIP --- */
 .dev-tooltip {
     position: fixed;
