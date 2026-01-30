@@ -175,6 +175,19 @@ function renderCardContent(card, units, viewIndex) {
             <div class="radar-chart-container">
                 ${generateRadarChart(data.stats, data.color)}
             </div>
+
+            <!-- Mobile Stats List (Visible only on mobile) -->
+            <div class="dev-stats-mobile">
+                ${data.stats.map(s => `
+                    <div class="stat-row">
+                        <span class="stat-label">${s.label}</span>
+                        <div class="stat-bar-container">
+                            <div class="stat-bar-fill" style="width: ${s.value}%; background: ${data.color}"></div>
+                        </div>
+                        <span class="stat-value" style="color: ${data.color}">${s.value}</span>
+                    </div>
+                `).join('')}
+            </div>
         </div>
     `;
 

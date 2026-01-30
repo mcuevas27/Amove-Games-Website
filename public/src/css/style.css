@@ -267,6 +267,12 @@ body::after {
 @keyframes dotFade { 0% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } }
 @keyframes converge { 0% { opacity: 0; margin-top: -15px; } 30% { opacity: 1; } 100% { opacity: 0; margin-top: 5px; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(0px) scale(0.3); } }
 
+.dev-stats-mobile {
+  display: none;
+}
+
+/* --- SELECTION BOX --- */
+
 /* --- SELECTION BOX --- */
 .selection-box {
     position: absolute;
@@ -999,6 +1005,55 @@ body::after {
     .devs-mobile-card .dev-card.multi-select .dev-img-container {
         width: 100px;
         height: 100px;
+    }
+
+    /* --- MOBILE SPECIFIC STATS (Below Radar) --- */
+    .dev-stats-mobile {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        margin-top: 15px;
+        margin-bottom: 20px;
+        gap: 8px;
+        padding: 0 10px;
+    }
+
+    .stat-row {
+        display: flex; /* Row layout */
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-family: 'Share Tech Mono', monospace;
+        font-size: 0.9rem;
+    }
+
+    .stat-label {
+        color: #aaa;
+        width: 35%; /* Fixed width for labels */
+        text-align: right;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .stat-bar-container {
+        flex-grow: 1; /* Take up remaining space */
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .stat-bar-fill {
+        height: 100%;
+        border-radius: 3px;
+        box-shadow: 0 0 5px currentColor;
+    }
+
+    .stat-value {
+        width: 15%; /* Fixed width for value */
+        text-align: left;
+        font-weight: bold;
     }
 
     .devs-mobile-card .selection-portraits {
