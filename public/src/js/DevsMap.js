@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -10,6 +11,10 @@ import { initUnits, updateUnits, initUnitGUI } from './UnitSystem.js';
 import { initDevCardGUI } from './DevCardUI.js';
 import { initFog, updateFog } from './FogSystem.js';
 
+// --- MOBILE DETECTION ---
+function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
 
 let scene, camera, renderer, composer, controls;
 let animationId = null;
@@ -37,6 +42,8 @@ export function initDevsMap(containerId) {
         return;
     }
 
+    const mobile = isMobile();
+
     // 1. Scene Setup
     scene = new THREE.Scene();
     
@@ -55,18 +62,21 @@ export function initDevsMap(containerId) {
     camera.lookAt(0, 0, 0);
 
     // Renderer
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: !mobile }); // Disable AA on mobile for perf
+    
+    // Performance: Throttle pixel ratio on mobile
+    const pixelRatio = mobile ? 1 : Math.min(window.devicePixelRatio, 2);
+    renderer.setPixelRatio(pixelRatio);
+    
     renderer.setSize(container.clientWidth, container.clientHeight);
+    
     // Important: shadow map enabled if we want shadows
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = mobile ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap; // Cheaper shadows on mobile
     container.appendChild(renderer.domElement);
 
     // Controls
     controls = new MapControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enableZoom = false; // Disable zoom to allow scrolling
@@ -85,8 +95,11 @@ export function initDevsMap(containerId) {
     const dirLight = new THREE.DirectionalLight(0xffffff, SETTINGS.lighting.dirLightIntensity);
     dirLight.position.set(...SETTINGS.lighting.dirLightPos);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
+    
+    // Performance: Smaller shadow map on mobile
+    const shadowMapSize = mobile ? 512 : 2048;
+    dirLight.shadow.mapSize.width = shadowMapSize;
+    dirLight.shadow.mapSize.height = shadowMapSize;
 
     // Expand shadow camera frustum to cover entire map
     dirLight.shadow.camera.left = -25;
@@ -102,14 +115,18 @@ export function initDevsMap(containerId) {
     composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
-    // Mild bloom for the neon effect
-    const bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(container.clientWidth, container.clientHeight),
-        0.5, // Strength (lower than main scene)
-        0.4, // Radius
-        0.85 // Threshold (high to only bloom bright UI/Effects)
-    );
-    composer.addPass(bloomPass);
+    
+    // Performance: Skip or reduce bloom on mobile
+    if (!mobile) {
+        // Mild bloom for the neon effect
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(container.clientWidth, container.clientHeight),
+            0.5, // Strength (lower than main scene)
+            0.4, // Radius
+            0.85 // Threshold (high to only bloom bright UI/Effects)
+        );
+        composer.addPass(bloomPass);
+    }
 
     // 2. Initialize Modules
     initHexGrid(scene);
@@ -133,8 +150,8 @@ export function initDevsMap(containerId) {
     // Resize Handler
     window.addEventListener('resize', onWindowResize);
 
-    // Debug GUI
-    // initGUI();
+    // Debug GUI (Hidden on mobile)
+    // if (!mobile) initGUI(); 
 }
 
 function initGUI() {
@@ -177,9 +194,14 @@ function onWindowResize() {
     camera.bottom = -frustum;
     
     camera.updateProjectionMatrix();
+    
+    // Update Size
     renderer.setSize(container.clientWidth, container.clientHeight);
     composer.setSize(container.clientWidth, container.clientHeight);
 }
+
+let fpsInterval = 1000 / 30; // 30 FPS target for mobile
+let then = Date.now();
 
 function animate() {
     if (!isVisible) {
@@ -189,6 +211,14 @@ function animate() {
 
     animationId = requestAnimationFrame(animate);
     
+    // Performance: Throttle FPS on mobile
+    if (isMobile()) {
+        const now = Date.now();
+        const elapsed = now - then;
+        if (elapsed < fpsInterval) return;
+        then = now - (elapsed % fpsInterval);
+    }
+    
     const time = performance.now() * 0.001;
 
     controls.update();
@@ -197,7 +227,6 @@ function animate() {
     updateGrid(time);
     updateFog(time);
     updateUnits(time);
-
 
     composer.render();
 }

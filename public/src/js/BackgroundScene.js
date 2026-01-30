@@ -5,6 +5,11 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
+// --- MOBILE DETECTION ---
+function isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 // --- SHADERS INLINED ---
 const mapVertexShader = `
     varying vec2 vUv;
@@ -250,10 +255,15 @@ const mapFragmentShader = `
 `;
 
 export function initBackgroundScene(containerId) {
+    const mobile = isMobile();
+
     // Scene Setup
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const renderer = new THREE.WebGLRenderer({ alpha: true });
+    
+    // Performance: Throttle pixel ratio on mobile
+    const pixelRatio = mobile ? 1 : Math.min(window.devicePixelRatio, 2);
     
     const getCanvasSize = () => ({
         w: window.innerWidth,
@@ -262,7 +272,7 @@ export function initBackgroundScene(containerId) {
     let canvasSize = getCanvasSize();
     
     renderer.setSize(canvasSize.w, canvasSize.h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
+    renderer.setPixelRatio(pixelRatio); 
     document.getElementById(containerId).appendChild(renderer.domElement);
     
     // --- SETTINGS (Defaults) ---
@@ -326,14 +336,15 @@ export function initBackgroundScene(containerId) {
         devsGlow: 4
     };
 
-    // --- PING PONG BUFFERS ---
-    const simRes = 512; 
+    // --- PING PONG BUFFERS (Skipped on Mobile) ---
+    const simRes = mobile ? 64 : 512; 
     const simParams = {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
         format: THREE.RGBAFormat,
         type: THREE.FloatType 
     };
+    
     let simBufferA = new THREE.WebGLRenderTarget(simRes, simRes, simParams);
     let simBufferB = new THREE.WebGLRenderTarget(simRes, simRes, simParams);
     
@@ -392,17 +403,20 @@ export function initBackgroundScene(containerId) {
 
     const canvasContainer = document.getElementById(containerId);
 
-    document.addEventListener('mousemove', (e) => {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        // Normalize to 0-1, y flipped for UV
-        const u = x / rect.width;
-        const v = 1.0 - (y / rect.height);
-        
-        simUniforms.uMouse.value.set(u, v);
-    });
+    // Skip mouse interaction on mobile
+    if (!mobile) {
+        document.addEventListener('mousemove', (e) => {
+            const rect = renderer.domElement.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Normalize to 0-1, y flipped for UV
+            const u = x / rect.width;
+            const v = 1.0 - (y / rect.height);
+            
+            simUniforms.uMouse.value.set(u, v);
+        });
+    }
 
     window.addEventListener('resize', () => {
             canvasSize = getCanvasSize();
@@ -421,16 +435,23 @@ export function initBackgroundScene(containerId) {
     const mapPass = new RenderPass(scene, camera);
     composer.addPass(mapPass);
 
-    const bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight), 
-        1.5,   // Strength
-        0.1,  // Radius
-        0.3    // Threshold
-    );
-    composer.addPass(bloomPass);
-
+    // Performance: Disable Bloom on mobile
+    if (!mobile) {
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight), 
+            1.5,   // Strength
+            0.1,  // Radius
+            0.3    // Threshold
+        );
+        composer.addPass(bloomPass);
+    }
+    
+    
+    // --- GUI SETUP ---
     const gui = new GUI({ title: 'A-Move Debug', closed: true, load: false });
     gui.close();
+    
+    if (mobile) gui.hide(); // Hide GUI on mobile
 
     function updateCSS(varName, value, unit='px') {
         document.documentElement.style.setProperty(varName, value + unit);
@@ -469,36 +490,46 @@ export function initBackgroundScene(containerId) {
     
     fHex.open();
     
-    const fBloom = gui.addFolder('Bloom');
-    fBloom.add(bloomPass, 'strength', 0.0, 5.0).name('Strength');
-    fBloom.add(bloomPass, 'radius', 0.0, 1.0).name('Radius');
-    fBloom.add(bloomPass, 'threshold', 0.0, 1.0).name('Threshold');
-    
     const fScroll = gui.addFolder('Scroll Info');
     
     gui.add(settings, 'export').name('💾 EXPORT SETTINGS');
 
+    let processing = false;
+    let fpsInterval = 1000 / 30; // 30 FPS target
+    let then = Date.now();
+
     function animate() {
         requestAnimationFrame(animate);
+
+        // Performance: Throttle FPS on mobile
+        if (mobile) {
+            const now = Date.now();
+            const elapsed = now - then;
+            if (elapsed < fpsInterval) return;
+            then = now - (elapsed % fpsInterval);
+        }
+
         const dt = clock.getDelta();
         mainUniforms.uTime.value = clock.getElapsedTime();
         
-        // --- STEP 1: RENDER SIMULATION ---
-        // Sim Buffer Swap
-        const bufferRead = simBufferA;
-        const bufferWrite = simBufferB;
-        
-        simUniforms.uTexture.value = bufferRead.texture;
-        
-        renderer.setRenderTarget(bufferWrite);
-        renderer.render(simScene, simCamera);
-        
-        // Pass the new texture to the main shader
-        mainUniforms.uMask.value = bufferWrite.texture;
-        
-        // Swap Buffers for next frame
-        simBufferA = bufferWrite;
-        simBufferB = bufferRead;
+        // --- STEP 1: RENDER SIMULATION (Opt-out on Mobile) ---
+        if (!mobile) {
+            // Sim Buffer Swap
+            const bufferRead = simBufferA;
+            const bufferWrite = simBufferB;
+            
+            simUniforms.uTexture.value = bufferRead.texture;
+            
+            renderer.setRenderTarget(bufferWrite);
+            renderer.render(simScene, simCamera);
+            
+            // Pass the new texture to the main shader
+            mainUniforms.uMask.value = bufferWrite.texture;
+            
+            // Swap Buffers for next frame
+            simBufferA = bufferWrite;
+            simBufferB = bufferRead;
+        }
         
         // --- STEP 2: RENDER MAIN SCENE ---
         // renderer.setRenderTarget(null); // Screen -> Removed, composer renders to screen now
