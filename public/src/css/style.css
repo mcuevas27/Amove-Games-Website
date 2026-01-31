@@ -687,7 +687,8 @@ body::after {
     position: relative; /* For absolute children */
     overflow: hidden; /* Contain the canvas */
     box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
-    backdrop-filter: blur(5px);
+    box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+    /* backdrop-filter: blur(5px); */ /* REMOVED: Creates stacking context that traps children below CRT overlay */
     margin: 0 auto; /* Center it */
     
     /* Disable selection and native UI on mobile */
@@ -722,7 +723,7 @@ body::after {
     transform: translateY(20px);
     pointer-events: none;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    z-index: 10;
+    z-index: 1002; /* Lift above CRT Overlay */
 }
 
 .dev-card.alt-pos {
@@ -760,7 +761,7 @@ body::after {
 /* EXTERNAL PORTRAIT */
 .dev-portrait-external {
     position: relative;
-    z-index: 20;
+    z-index: 1002; /* Lift above CRT overlay */
     margin: 0; /* Reset margins */
     pointer-events: auto;
 }
