@@ -138,6 +138,10 @@ body::after {
     font-weight: 900;
     text-transform: uppercase;
     width: 100%;
+    
+    /* Lift above CRT overlay (z-index 999) */
+    position: relative;
+    z-index: 1002;
 }
 
 /* Scanline Text Effect */
@@ -166,15 +170,19 @@ body::after {
 
 .title-white {
     --scan-color: #e0e0e0;
+    color: #e0e0e0;
+    filter: drop-shadow(0 0 15px rgba(224, 224, 224, 0.8));
 }
 
 .title-cyan {
     --scan-color: #00ffff;
+    color: #00ffff;
     filter: drop-shadow(0 0 15px rgba(0,255,255,0.8));
 }
 
 .title-orange {
     --scan-color: #ffaa00;
+    color: #ffaa00;
     filter: drop-shadow(0 0 15px rgba(255, 170, 0, 0.8));
 }
 
