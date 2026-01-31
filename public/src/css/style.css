@@ -685,6 +685,7 @@ body::after {
     border: 1px solid rgba(0, 255, 255, 0.2);
     border-radius: 12px;
     position: relative; /* For absolute children */
+    z-index: 1002; /* Lift entire map above CRT overlay */
     overflow: hidden; /* Contain the canvas */
     box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
     box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
