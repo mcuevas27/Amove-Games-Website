@@ -271,7 +271,7 @@ function generateRadarChart(stats, color) {
     return `
         <svg viewBox="0 0 250 220" class="radar-chart-svg">
             <!-- Background Pentagon -->
-            <polygon points="${bgPoints}" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+            <polygon points="${bgPoints}" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>
             ${axisLines}
             
             <!-- Data Polygon -->
