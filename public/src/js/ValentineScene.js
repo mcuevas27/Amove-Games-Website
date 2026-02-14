@@ -248,11 +248,11 @@ export function initValentineScene(containerId) {
         // Pulse Defaults
         pulseSpeed: 3.0, // Heartbeat pace?
         pulseDensity: 0.3,
-        pulseColor: { r: 0.5, g: 0.0, b: 0.25 }, // Dimmed from 1.0, 0, 0.5
-        // Stroke Defaults - Pink/Red variations (Dimmed)
-        strokeColor1: { r: 0.2, g: 0.0, b: 0.1 }, 
-        strokeColor2: { r: 0.3, g: 0.0, b: 0.15 }, 
-        strokeColor3: { r: 0.4, g: 0.0, b: 0.2 }, 
+        pulseColor: { r: 0.25, g: 0.0, b: 0.12 }, // Dimmed again (was 0.5)
+        // Stroke Defaults - Pink/Red variations (Dimmed again)
+        strokeColor1: { r: 0.1, g: 0.0, b: 0.05 }, 
+        strokeColor2: { r: 0.15, g: 0.0, b: 0.08 }, 
+        strokeColor3: { r: 0.2, g: 0.0, b: 0.1 }, 
         
         // Interaction
         cursorRadius: 15.0,
