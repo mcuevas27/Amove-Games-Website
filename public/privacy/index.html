@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy | A-Move Games</title>
+    <meta name="description" content="Privacy Policy for A-Move Games.">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="Privacy Policy - A-Move Games">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://amovegames.com/privacy">
+
+    <!-- Styles (Relative paths adjusted) -->
+    <link rel="stylesheet" href="../src/css/style.css?v=6">
+    <!-- VALENTINE'S DAY THEME ENABLED -->
+    <link rel="stylesheet" href="../src/css/valentine.css">
+
+    <style>
+        /* Privacy Specific Overrides */
+        .page-container {
+            max-width: 800px;
+            margin: 100px auto;
+            padding: 2rem;
+            background: rgba(5, 5, 16, 0.85); /* Dark background for readability */
+            border: 1px solid rgba(0, 255, 255, 0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 1001; /* Above CRT overlay if possible, or below? Let's keep it standard z-index */
+        }
+        
+        /* Ensure readability above CRT overlay */
+        .page-container {
+            position: relative;
+            z-index: 1002; /* Lift above CRT (999) */
+        }
+
+        h1 {
+            color: var(--v-pink, #00ffff); /* Fallback to Cyan if var missing */
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+        }
+
+        .last-updated {
+            font-family: 'Share Tech Mono', monospace;
+            color: #888;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        h2 {
+            color: var(--v-red, #ffaa00);
+            font-size: 1.5rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 0.5rem;
+        }
+
+        p, ul {
+            font-family: 'Share Tech Mono', monospace;
+            color: #ccc;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        a {
+            color: var(--v-pink, #3ba2ce);
+            text-decoration: underline;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 2rem;
+            font-family: 'Share Tech Mono', monospace;
+            text-decoration: none;
+            color: var(--v-soft, #fff);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--v-pink, #00ffff);
+            color: var(--v-pink, #00ffff);
+        }
+    </style>
+</head>
+<body>
+    <!-- Background Container -->
+    <div id="canvas-container"></div>
+    <!-- CRT Overlay from CSS -->
+    <div class="vignette"></div>
+
+    <main class="page-container">
+        <a href="/" class="back-link">← Back to Home</a>
+        
+        <h1>Privacy Policy</h1>
+        <div class="last-updated">Last updated: February 14, 2026</div>
+
+        <p>A-Move Games ("we", "us") operates a self-hosted social media management tool that connects to our Facebook and Instagram accounts to schedule and publish content on our behalf.</p>
+
+        <h2>Information We Access</h2>
+        <ul>
+            <li>Facebook Page and Instagram account profile information</li>
+            <li>Ability to create, publish, and manage posts on our connected accounts</li>
+        </ul>
+
+        <h2>How We Use This Information</h2>
+        <p>This tool is used exclusively by A-Move Games for internal social media management. We use it to schedule and publish content to our own social media accounts.</p>
+
+        <h2>Data Sharing</h2>
+        <p>We do not collect, store, or share any third-party user data. This application is used solely for managing our own social media presence.</p>
+
+        <h2>Data Storage</h2>
+        <p>Account connection tokens are stored securely on our private, self-hosted server. No user data is transmitted to external parties.</p>
+
+        <h2>Contact</h2>
+        <p>If you have questions about this privacy policy, contact us at <a href="mailto:smm@amovegames.com">smm@amovegames.com</a></p>
+    </main>
+
+    <!-- Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <!-- Background Script (Valentine Theme) -->
+    <script type="module">
+        // Import Valentine Scene with path adjusted for subdirectory
+        import { initValentineScene } from '../src/js/ValentineScene.js';
+        
+        // Start the background effect
+        initValentineScene('canvas-container');
+    </script>
+</body>
+</html>
