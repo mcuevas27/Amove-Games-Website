@@ -1,0 +1,156 @@
+/* --- VALENTINE'S DAY THEME OVERRIDE --- */
+
+/* 1. Global Color Override */
+:root {
+    /* 
+       ORIGINAL:
+       --scan-color (Cyan): #00ffff
+       --scan-color (Orange): #ffaa00
+       --scan-color (White/Grey): #e0e0e0
+    */
+    
+    /* NEW PALETTE */
+    --v-pink: #ff69b4;   /* Hot Pink */
+    --v-red: #ff0033;    /* Passion Red */ 
+    --v-soft: #ffccdd;   /* Soft Pink */
+    --v-purple: #b300ff; /* Deep Purple (kept from original) */
+}
+
+/* Override Text Classes */
+.title-cyan {
+    color: var(--v-pink) !important;
+    --scan-color: var(--v-pink) !important;
+    filter: drop-shadow(0 0 15px rgba(255, 105, 180, 0.8)) !important;
+}
+
+.title-orange {
+    color: var(--v-red) !important;
+    --scan-color: var(--v-red) !important;
+    filter: drop-shadow(0 0 15px rgba(255, 0, 51, 0.8)) !important;
+}
+
+.title-white {
+    color: var(--v-soft) !important;
+    --scan-color: var(--v-soft) !important;
+    filter: drop-shadow(0 0 15px rgba(255, 204, 221, 0.8)) !important;
+}
+
+/* Helper for specific overrides if needed */
+.text-scanline {
+    /* Ensure variable override propagates */
+}
+
+/* 2. CRT Overlay - "Love Potion" Tint */
+body::after {
+    /* Original was R/G/B split. Let's shift to Pink/Purple/Red split */
+    background: linear-gradient(rgba(20, 0, 10, 0) 50%, rgba(50, 0, 20, 0.25) 50%), 
+                linear-gradient(90deg, rgba(255, 0, 50, 0.06), rgba(255, 0, 255, 0.04), rgba(50, 0, 255, 0.06)) !important;
+}
+
+/* 3. Cupid's Cursor (A-Move Marker) */
+.amove-marker::before {
+    /* Turn ring into a heart shape or just pink ring? Let's go Pink Ring for simplicity/clarity */
+    border-color: var(--v-pink) !important;
+    box-shadow: 0 0 10px var(--v-pink);
+}
+
+.amove-marker::after {
+    /* Center Dot */
+    background: #fff;
+    box-shadow: 0 0 10px var(--v-pink) !important;
+}
+
+/* The converging arrows - Make them heart-colored */
+.arrow {
+    border-bottom-color: var(--v-pink) !important;
+    filter: drop-shadow(0 0 5px var(--v-pink)) !important;
+}
+
+/* Optional: Make the arrows look a bit more like hearts by using a pseudo-element trick?
+   Or just keep them as arrows (Cupid's Arrows). 
+   Let's keep them as arrows but maybe rotate/scale to look sharper? 
+   Standard arrow is fine, just pink.
+*/
+
+/* 4. Border & Accent Overrides */
+.main-nav {
+    border-bottom: 1px solid rgba(255, 105, 180, 0.3) !important;
+}
+
+.main-nav a {
+    color: var(--v-pink) !important;
+    text-shadow: 0 0 5px rgba(255, 105, 180, 0.5) !important;
+}
+
+.main-nav a:hover {
+    text-shadow: 0 0 10px var(--v-pink) !important;
+    border-color: rgba(255, 105, 180, 0.5) !important;
+    background: rgba(255, 105, 180, 0.1) !important;
+}
+
+/* Ethos Cards */
+.ethos-card {
+    border: 1px solid rgba(255, 105, 180, 0.2) !important;
+}
+
+.ethos-card::before {
+    border-top-color: var(--v-red) !important;
+    border-left-color: var(--v-red) !important;
+}
+
+.ethos-card::after {
+    border-bottom-color: var(--v-pink) !important;
+    border-right-color: var(--v-pink) !important;
+}
+
+.ethos-card:hover {
+    border-color: rgba(255, 105, 180, 0.5) !important;
+    box-shadow: 0 10px 30px rgba(50, 0, 20, 0.6), 0 0 10px rgba(255, 105, 180, 0.2) !important;
+}
+
+.ethos-card:hover::before {
+    border-color: var(--v-red) !important;
+}
+
+.ethos-card:hover::after {
+    border-color: var(--v-pink) !important;
+}
+
+.ethos-title {
+    text-shadow: 0 0 5px rgba(255, 105, 180, 0.5) !important;
+}
+
+/* Specific Card Colors - Override the data-index colors */
+.ethos-card[data-index="01"] .ethos-title { color: var(--v-red) !important; text-shadow: 0 0 8px rgba(255, 0, 51, 0.6) !important; }
+.ethos-card[data-index="02"] .ethos-title { color: var(--v-pink) !important; text-shadow: 0 0 8px rgba(255, 105, 180, 0.6) !important; }
+.ethos-card[data-index="03"] .ethos-title { color: var(--v-red) !important; text-shadow: 0 0 8px rgba(255, 0, 51, 0.6) !important; }
+.ethos-card[data-index="04"] .ethos-title { color: var(--v-pink) !important; text-shadow: 0 0 8px rgba(255, 105, 180, 0.6) !important; }
+
+.ethos-desc {
+    color: #ffccdd !important; /* Soft Pink text */
+}
+
+/* Contact Links */
+.contact-link {
+    color: var(--v-pink) !important;
+}
+
+.contact-link:hover {
+    color: var(--v-soft) !important;
+    border-color: var(--v-pink) !important;
+}
+
+/* Dev Map Container Border */
+.devs-map-container {
+    border-color: rgba(255, 105, 180, 0.3) !important;
+}
+
+/* Dev Tooltip */
+.dev-tooltip {
+    border-color: var(--v-pink) !important;
+    box-shadow: 0 0 30px rgba(255, 105, 180, 0.3) !important;
+}
+
+.tooltip-content p {
+    color: var(--v-pink) !important;
+}
