@@ -13,8 +13,8 @@
 
     <!-- Styles (Relative paths adjusted) -->
     <link rel="stylesheet" href="../src/css/style.css?v=6">
-    <!-- VALENTINE'S DAY THEME ENABLED -->
-    <link rel="stylesheet" href="../src/css/valentine.css">
+    <!-- VALENTINE'S DAY THEME DISABLED -->
+    <!-- <link rel="stylesheet" href="../src/css/valentine.css"> -->
 
     <style>
         /* Privacy Specific Overrides */
@@ -140,13 +140,13 @@
         }
     </script>
 
-    <!-- Background Script (Valentine Theme) -->
+    <!-- Background Script (Original) -->
     <script type="module">
-        // Import Valentine Scene with path adjusted for subdirectory
-        import { initValentineScene } from '../src/js/ValentineScene.js';
+        // Import Original Scene
+        import { initBackgroundScene } from '../src/js/BackgroundScene.js';
         
         // Start the background effect
-        initValentineScene('canvas-container');
+        initBackgroundScene('canvas-container');
     </script>
 </body>
 </html>

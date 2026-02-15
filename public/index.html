@@ -16,8 +16,8 @@
     
     <!-- A new universe -->
     <link rel="stylesheet" href="src/css/style.css?v=6">
-    <!-- VALENTINE'S DAY THEME ENABLED -->
-    <link rel="stylesheet" href="src/css/valentine.css">
+    <!-- VALENTINE'S DAY THEME DISABLED -->
+    <!-- <link rel="stylesheet" href="src/css/valentine.css"> -->
     <script type="importmap">
         {
             "imports": {
@@ -57,8 +57,7 @@
         </section>
         <!-- maybe no robots, definitely crabs -->
 
-        <!-- ORIGINAL ETHOS SECTION (Commented out for Valentine's Day) -->
-        <!-- 
+        <!-- ORIGINAL ETHOS SECTION (Restored) -->
         <section id="goals" class="section-goals">
             <h2 class="title-orange">ETHOS</h2>
             <div class="ethos-grid">
@@ -94,50 +93,17 @@
                     <p class="ethos-desc">Team emphasis on collective achievement over individual goals.</p>
                 </div>
             </div>
-        </section> 
-        -->
+        </section>
 
-        <!-- VALENTINE'S DAY THEME SECTION -->
+        <!-- VALENTINE'S DAY THEME SECTION (DISABLED) -->
+        <!--
         <section id="goals" class="section-goals">
             <h2 class="title-orange">RELATIONSHIP GOALS</h2>
             <div class="ethos-grid">
-                <!-- CHEMISTRY (Efficiency) -->
-                <div class="ethos-card" data-index="01">
-                    <div class="ethos-card-header">
-                        <div class="ethos-icon">⚡</div>
-                        <h3 class="ethos-title">CHEMISTRY</h3>
-                    </div>
-                    <p class="ethos-desc">Sparks fly when we work together. Our small team has electric energy.</p>
-                </div>
-
-                <!-- EXPERIENCE (Expertise) -->
-                <div class="ethos-card" data-index="02">
-                    <div class="ethos-card-header">
-                        <div class="ethos-icon">🥰</div>
-                        <h3 class="ethos-title">EXPERIENCE</h3>
-                    </div>
-                    <p class="ethos-desc">We know how to treat a player right. Decades of knowing what you need.</p>
-                </div>
-
-                <!-- DEVOTION (Focused) -->
-                <div class="ethos-card" data-index="03">
-                    <div class="ethos-card-header">
-                        <div class="ethos-icon">🎯</div>
-                        <h3 class="ethos-title">DEVOTION</h3>
-                    </div>
-                    <p class="ethos-desc">We have eyes only for the best gameplay. Committed to the long haul.</p>
-                </div>
-
-                <!-- LOYALTY (Integrity) -->
-                <div class="ethos-card" data-index="04">
-                    <div class="ethos-card-header">
-                        <div class="ethos-icon">💍</div>
-                        <h3 class="ethos-title">LOYALTY</h3>
-                    </div>
-                    <p class="ethos-desc">We'll never ghost our community. In it for better or worse.</p>
-                </div>
+                ... (Content removed to save space in revert)
             </div>
         </section>
+        -->
 
         <section id="devs" class="section-devs">
             <h2 class="title-cyan">DEVS</h2>
@@ -168,10 +134,10 @@
     </main>
 
     <script type="module">
-        import { initValentineScene } from './src/js/ValentineScene.js';
+        import { initBackgroundScene } from './src/js/BackgroundScene.js';
         
         // Start the background effect
-        initValentineScene('canvas-container');
+        initBackgroundScene('canvas-container');
     </script>
     <!-- Reset -->
 </body>
